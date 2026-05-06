@@ -16,6 +16,7 @@ try {
     $pdo = new PDO("mysql:host=$host;dbname=$db;charset=utf8mb4", $user, $pass);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
+    // Ensure table exists
     $pdo->exec("CREATE TABLE IF NOT EXISTS app_data (
         data_key VARCHAR(255) PRIMARY KEY,
         data_value LONGTEXT,
@@ -24,7 +25,8 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $stmt = $pdo->query("SELECT data_key, data_value FROM app_data");
-        echo json_encode($stmt->fetchAll(PDO::FETCH_KEY_PAIR));
+        $results = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        echo json_encode($results);
     } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $input = json_decode(file_get_contents('php://input'), true);
         if (isset($input['key'], $input['value'])) {
@@ -32,11 +34,17 @@ try {
             $stmt->execute([$input['key'], $input['value'], $input['value']]);
             echo json_encode(['success' => true]);
         } else {
-            echo json_encode(['error' => 'Missing key or value']);
+            echo json_encode(['error' => 'Missing key or value', 'received' => $input]);
         }
     }
 } catch (PDOException $e) {
     http_response_code(500);
-    echo json_encode(['error' => 'DB error', 'msg' => $e->getMessage()]);
+    echo json_encode([
+        'error' => 'Database Connection Failed',
+        'details' => $e->getMessage(),
+        'host' => $host,
+        'user' => $user,
+        'db' => $db
+    ]);
 }
 ?>

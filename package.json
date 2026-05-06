@@ -2,7 +2,7 @@
   "name": "rmk-groups-backend",
   "version": "1.0.0",
   "description": "Cloud Sync Backend for RMK Groups Admin",
-  "main": "server.js",
+  "main": "app.js",
   "scripts": {
     "start": "node app.js",
     "dev": "node app.js"

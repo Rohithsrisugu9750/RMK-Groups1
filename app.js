@@ -3,7 +3,40 @@ const cors = require('cors');
 const path = require('path');
 const http = require('http');
 const { Server } = require("socket.io");
-const { pool, testConnection } = require('./db');
+const mysql = require('mysql2/promise');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+// Database Configuration
+const pool = mysql.createPool({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    port: parseInt(process.env.DB_PORT) || 3306,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+});
+
+async function testConnection() {
+    try {
+        const connection = await pool.getConnection();
+        await connection.execute(`
+            CREATE TABLE IF NOT EXISTS app_data (
+                data_key VARCHAR(255) PRIMARY KEY,
+                data_value LONGTEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ Connected & Table Verified');
+        connection.release();
+        return true;
+    } catch (error) {
+        console.error('❌ Failed:', error.message);
+        return false;
+    }
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -47,6 +80,11 @@ app.use(express.json({ limit: '50mb' }));
 
 // Serve all static HTML/JS/CSS files from this directory
 app.use(express.static(path.join(__dirname)));
+
+// Explicit root route to fix "Cannot GET /" on some hosting environments
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // Test database connection on startup
 testConnection();

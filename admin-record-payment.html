@@ -6,7 +6,7 @@
     <title>Record Payment | RMK Groups</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="admin.css">
+    <link rel="stylesheet" href="assets/css/admin.css">
     <style>
         .page-form-wrap { max-width: 640px; margin: 0 auto; }
         .form-card { background:#fff; border-radius:16px; box-shadow:0 4px 24px rgba(0,0,0,0.07); border:1px solid #F3F4F6; margin-bottom:1.5rem; overflow:hidden; }
@@ -71,7 +71,7 @@
         <div class="admin-header-content">
             <button class="mobile-sidebar-toggle" id="sidebarToggle"><i class="fas fa-bars"></i></button>
             <div class="admin-logo">
-                <img src="logo.png" alt="RMK Groups" style="height:50px;width:auto;">
+                <img src="assets/img/logo.png" alt="RMK Groups" style="height:50px;width:auto;">
                 <span class="admin-badge">Admin</span>
                 <span id="connectionStatus" class="connection-status offline">Connecting...</span>
                 <span id="dbStatus" class="connection-status offline" style="margin-left:10px;background:#95a5a6;padding:4px 10px;border-radius:20px;font-size:11px;">DB: Offline</span>
@@ -201,8 +201,8 @@
 
     
     <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-    <script src="realtime.js"></script>
-    <script src="admin_core.js?v=2.1"></script>
-    <script src="admin-pages.js"></script>
+    <script src="assets/js/realtime.js"></script>
+    <script src="assets/js/admin.js?v=2.1"></script>
+    <script src="assets/js/admin-pages.js"></script>
 </body>
 </html>

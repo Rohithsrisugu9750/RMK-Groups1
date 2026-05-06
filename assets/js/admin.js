@@ -1,4 +1,20 @@
+function safeJsonParse(str, fallback = []) {
+    try {
+        if (!str || str === 'undefined' || str === 'null') return fallback;
+        const parsed = JSON.parse(str);
+        return parsed || fallback;
+    } catch (e) {
+        console.warn('JSON Parse Error:', e);
+        return fallback;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async function () {
+    // 2. Hide Preloader instantly
+    const preloader = document.querySelector('.preloader');
+    if (preloader) preloader.style.display = 'none';
+
+
     /**
      * CLOUD SYNCHRONIZATION SYSTEM (PHP-Direct Mode)
      * Uses sync.php directly - runs on the same Hostinger server as MySQL.
@@ -16,25 +32,40 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
 
         try {
-            let response;
-            const endpoints = ['/sync.php', 'sync.php', 'https://rmkgroups.in/sync.php'];
+            let cloudData = null;
+            const endpoints = ['https://rmkgroups.in/sync.php', '/sync.php', 'sync.php'];
             let lastError = null;
 
             for (let url of endpoints) {
+                console.log(`Trying sync endpoint: ${url}`);
                 try {
-                    response = await fetch(url, { cache: 'no-cache' });
-                    if (response.ok) break;
+                    const response = await fetch(url, { cache: 'no-cache' });
+                    if (response.ok) {
+                        const text = await response.text();
+                        console.log(`Response from ${url} received`);
+                        try {
+                            const data = JSON.parse(text);
+                            if (data && typeof data === 'object' && !data.error) {
+                                cloudData = data;
+                                console.log(`Cloud data successfully loaded from ${url}`);
+                                break;
+                            } else if (data && data.error) {
+                                console.warn(`DB Error from ${url}:`, data.error);
+                                lastError = new Error(data.error);
+                            }
+                        } catch (e) {
+                            console.warn(`JSON Parse Error from ${url}`);
+                            lastError = new Error("Response was not valid JSON");
+                        }
+                    } else {
+                        lastError = new Error(`HTTP ${response.status}`);
+                    }
                 } catch (e) {
                     lastError = e;
                 }
             }
 
-            if (!response || !response.ok) throw new Error(`sync.php failed. Last error: ${lastError ? lastError.message : 'No response'}`);
-
-            const cloudData = await response.json();
-
-            // Check if the PHP returned a DB error
-            if (cloudData.error) throw new Error(cloudData.error);
+            if (!cloudData) throw new Error(`Cloud sync failed. Last error: ${lastError ? lastError.message : 'No valid data'}`);
 
             window._isCloudSyncing = true; // prevent loopback saves during merge
             for (let key in cloudData) {
@@ -45,20 +76,26 @@ document.addEventListener('DOMContentLoaded', async function () {
 
                 if (localValue) {
                     try {
-                        const incoming = JSON.parse(cloudValue);
+                        // Support both stringified and already-parsed data
+                        const incoming = (typeof cloudValue === 'string') ? JSON.parse(cloudValue) : cloudValue;
                         if (Array.isArray(incoming)) {
-                            const current = JSON.parse(localValue);
+                            const current = (typeof localValue === 'string') ? JSON.parse(localValue) : localValue;
                             const dataMap = new Map();
-                            current.forEach(item => { if (item && item.id) dataMap.set(String(item.id), item); });
+                            if (Array.isArray(current)) {
+                                current.forEach(item => { if (item && item.id) dataMap.set(String(item.id), item); });
+                            }
                             incoming.forEach(item => { if (item && item.id) dataMap.set(String(item.id), item); });
                             const merged = Array.from(dataMap.values()).sort((a, b) => b.id - a.id);
                             localStorage.setItem(key, JSON.stringify(merged));
                         } else {
-                            localStorage.setItem(key, cloudValue);
+                            localStorage.setItem(key, typeof cloudValue === 'string' ? cloudValue : JSON.stringify(cloudValue));
                         }
-                    } catch (e) { localStorage.setItem(key, cloudValue); }
+                    } catch (e) { 
+                        console.error(`Error merging key ${key}:`, e);
+                        localStorage.setItem(key, typeof cloudValue === 'string' ? cloudValue : JSON.stringify(cloudValue)); 
+                    }
                 } else {
-                    localStorage.setItem(key, cloudValue);
+                    localStorage.setItem(key, typeof cloudValue === 'string' ? cloudValue : JSON.stringify(cloudValue));
                 }
             }
 
@@ -67,9 +104,6 @@ document.addEventListener('DOMContentLoaded', async function () {
                 dbBadge.style.background = '#10B981';
                 dbBadge.style.color = 'white';
             }
-            // Run Migration
-            migrateInvoiceNumbers();
-
             if (typeof loadInvoicesToTable === 'function') loadInvoicesToTable();
             if (typeof loadCustomersToTable === 'function') loadCustomersToTable();
         } catch (err) {
@@ -121,101 +155,70 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     // 1. Auth Guard
-    if (!checkAuth()) return;
-
-    // 2. Hide Preloader instantly
-    const preloader = document.querySelector('.preloader');
-    if (preloader) preloader.style.display = 'none';
+    if (!checkAuth()) {
+        console.warn('Auth check failed, redirecting...');
+        return;
+    }
 
     // Determine current page to run specific logic
     const path = window.location.pathname;
-
-    function migrateInvoiceNumbers() {
-        let invoices = JSON.parse(localStorage.getItem('rmk_invoices') || '[]');
-        let updated = false;
-        
-        invoices = invoices.map(inv => {
-            if (inv.invNumber && inv.invNumber.match(/^INV-\d{4}-\d+$/)) {
-                const parts = inv.invNumber.split('-');
-                if (parts.length === 3) {
-                    const oldFy = parts[1]; // e.g., '2627'
-                    if (oldFy.length === 4) {
-                        const year1 = '20' + oldFy.substring(0, 2);
-                        const year2 = '20' + oldFy.substring(2, 4);
-                        const newFy = year1 + '-' + year2;
-                        inv.invNumber = `INV-${newFy}-${parts[2]}`;
-                        updated = true;
-                    }
-                }
-            }
-            return inv;
-        });
-
-        if (updated) {
-            let wasSyncing = window._isCloudSyncing;
-            window._isCloudSyncing = false;
-            localStorage.setItem('rmk_invoices', JSON.stringify(invoices));
-            window._isCloudSyncing = wasSyncing;
-        }
-
-        let quotes = JSON.parse(localStorage.getItem('rmk_quotes') || '[]');
-        let qUpdated = false;
-        
-        quotes = quotes.map(qt => {
-            if (qt.quoteNumber && qt.quoteNumber.match(/^QT-\d{4}-\d+$/)) {
-                const parts = qt.quoteNumber.split('-');
-                if (parts.length === 3) {
-                    const oldFy = parts[1];
-                    if (oldFy.length === 4) {
-                        const year1 = '20' + oldFy.substring(0, 2);
-                        const year2 = '20' + oldFy.substring(2, 4);
-                        const newFy = year1 + '-' + year2;
-                        qt.quoteNumber = `QT-${newFy}-${parts[2]}`;
-                        qUpdated = true;
-                    }
-                }
-            }
-            return qt;
-        });
-
-        if (qUpdated) {
-            let wasSyncing = window._isCloudSyncing;
-            window._isCloudSyncing = false;
-            localStorage.setItem('rmk_quotes', JSON.stringify(quotes));
-            window._isCloudSyncing = wasSyncing;
-        }
-    }
+    console.log('Current Dashboard Path:', path);
 
     // Global initializations
-    initializeSidebar();
-    initializeCloudSync(); // NEW: Bulletproof Sync
-    applyUserRolePermissions();
+    try {
+        initializeSidebar();
+        initializeCloudSync();
+        applyUserRolePermissions();
+        console.log('Global Admin UI Initialized');
+    } catch (e) {
+        console.error('Error during global initialization:', e);
+    }
 
-    // 1. Billing Page
-    if (path.includes('admin-billing.html') || document.getElementById('createInvoiceBtn')) {
-        initializeBillingModule();
-        // 2. Dedicated Form Pages
-    } else if (path.includes('admin-create-invoice.html')) {
-        initializeCreateInvoicePage();
-    } else if (path.includes('admin-create-quote.html')) {
-        initializeCreateQuotePage();
-    } else if (path.includes('admin-record-payment.html')) {
-        initializeRecordPaymentPage();
-    } else if (path.includes('admin-customers.html')) {
-        initializeCustomersModule();
-    } else if (path.includes('admin-products.html')) {
-        initializeProductsModule();
-    } else if (path.includes('admin-inventory.html')) {
-        initializeInventoryModule();
-    } else if (path.includes('admin-reports.html')) {
-        initializeReportsModule();
-    } else if (path.includes('admin-settings.html')) {
-        initializeSettingsModule();
-        initializeUserManagementModule();
+    // Module-specific initializations
+    try {
+        if (path.includes('admin-billing') || path.includes('admin_billing') || document.getElementById('createInvoiceBtn')) {
+            console.log('Initializing Billing Module...');
+            initializeBillingModule();
+        } else if (path.includes('admin-create-invoice') || path.includes('admin_create_invoice')) {
+            console.log('Initializing Create Invoice Module...');
+            initializeCreateInvoicePage();
+        } else if (path.includes('admin-create-quote') || path.includes('admin_create_quote')) {
+            console.log('Initializing Create Quote Module...');
+            initializeCreateQuotePage();
+        } else if (path.includes('admin-record-payment') || path.includes('admin_record_payment')) {
+            console.log('Initializing Record Payment Module...');
+            initializeRecordPaymentPage();
+        } else if (path.includes('admin-customers') || path.includes('admin_customers') || document.getElementById('addCustomerBtn') || document.getElementById('exportCustomersBtn')) {
+            console.log('Initializing Customers Module...');
+            initializeCustomersModule();
+        } else if (path.includes('admin-products') || path.includes('admin_products') || document.getElementById('addProductBtn')) {
+            console.log('Initializing Products Module...');
+            initializeProductsModule();
+        } else if (path.includes('admin-inventory') || path.includes('admin_inventory') || document.getElementById('updateStockBtn') || document.getElementById('btnStockHistory')) {
+            console.log('Initializing Inventory Module...');
+            initializeInventoryModule();
+        } else if (path.includes('admin-reports') || path.includes('admin_reports') || document.getElementById('exportGstBtn') || document.getElementById('exportAttendanceBtn') || document.getElementById('downloadReportBtn')) {
+            console.log('Initializing Reports Module...');
+            initializeReportsModule();
+        } else if (path.includes('admin-settings') || path.includes('admin_settings') || document.getElementById('saveSettingsBtn') || document.getElementById('btnExportFullData')) {
+            console.log('Initializing Settings Module...');
+            initializeSettingsModule();
+            initializeUserManagementModule();
+        } else if (path.includes('admin-workers') || path.includes('admin_workers') || document.getElementById('addWorkerBtn')) {
+            console.log('Initializing Workers Module...');
+            initializeWorkersModule();
+        } else if (path.includes('admin-attendance') || path.includes('admin_attendance')) {
+            console.log('Initializing Attendance Module...');
+            initializeAttendanceModule();
+        }
+    } catch (e) {
+        console.error('Error during module-specific initialization:', e);
     }
 
     // Animate stats on all pages that have them
-    animateStats();
+    try {
+        animateStats();
+    } catch (e) { console.warn('Stat animation skipped:', e); }
 
     // Inject Footer
     injectAdminFooter();
@@ -244,7 +247,7 @@ function checkAuth() {
 
 // User Permission Management
 function applyUserRolePermissions() {
-    const sessionData = JSON.parse(localStorage.getItem('rmk_session'));
+    const sessionData = safeJsonParse(localStorage.getItem('rmk_session'), null);
     if (!sessionData) return;
 
     const userRole = sessionData.role;
@@ -445,7 +448,7 @@ function generateFinancialYearInvoiceNumber(type = 'invoice', manualValue = null
 
     // Scan existing records to find the absolute max counter
     const listKey = type === 'invoice' ? 'rmk_invoices' : 'rmk_quotes';
-    const records = JSON.parse(localStorage.getItem(listKey) || '[]');
+    const records = safeJsonParse(localStorage.getItem(listKey), []);
     let maxCounter = 0;
     
     records.forEach(rec => {
@@ -517,7 +520,7 @@ function initializeBillingModule() {
     setDefaultDates();
 
     // Populate Customer Dropdowns
-    const savedCustomers = JSON.parse(localStorage.getItem('rmk_customers') || '[]');
+    const savedCustomers = safeJsonParse(localStorage.getItem('rmk_customers'), []);
     const invSelect = document.getElementById('invCustomerName');
     const quoteSelect = document.getElementById('quoteCustomerName');
 
@@ -733,7 +736,7 @@ function initializeInvoiceModalLogic() {
     if (invCustomerName) {
         invCustomerName.addEventListener('change', function () {
             const customerId = this.value;
-            const customers = JSON.parse(localStorage.getItem('rmk_customers') || '[]');
+            const customers = safeJsonParse(localStorage.getItem('rmk_customers'), []);
             const customer = customers.find(c => c.id === customerId || c.company === customerId);
 
             if (customerId) {
@@ -1011,7 +1014,7 @@ function printInvoice() {
         printCustAddress = document.getElementById('invCustomClientAddress')?.value || '';
         printCustPhone = document.getElementById('invCustomClientMobile')?.value || 'N/A';
     } else {
-        const customers = JSON.parse(localStorage.getItem('rmk_customers') || '[]');
+        const customers = safeJsonParse(localStorage.getItem('rmk_customers'), []);
         const customer = customers.find(c => c.id === customerId || c.company === customerId);
         if (customer) {
             printCustName = customer.company;
@@ -1385,7 +1388,7 @@ function openPaymentModal(invoiceId = null, customerName = null) {
     document.getElementById('payInvoiceId').value = '';
 
     if (invoiceId) {
-        const invoices = JSON.parse(localStorage.getItem('rmk_invoices') || '[]');
+        const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
         const invoice = invoices.find(inv => String(inv.id) === String(invoiceId));
         if (invoice) {
             fillPaymentDetails(invoice);
@@ -1436,7 +1439,7 @@ function populatePayCustomerSelect(selectedCustName = null) {
     const customerSelect = document.getElementById('payCustomerSelect');
     if (!customerSelect) return;
 
-    const customers = JSON.parse(localStorage.getItem('rmk_customers') || '[]');
+    const customers = safeJsonParse(localStorage.getItem('rmk_customers'), []);
     customerSelect.innerHTML = '<option value="">-- Select Customer --</option>';
 
     customers.forEach(cust => {
@@ -1483,7 +1486,7 @@ function initializePaymentModal() {
             return;
         }
 
-        const invoices = JSON.parse(localStorage.getItem('rmk_invoices') || '[]');
+        const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
         const custInvoices = invoices.filter(inv =>
             inv.customerName === custName &&
             (parseFloat(inv.receivedAmount) || 0) < (parseFloat(inv.total) || 0)
@@ -1508,7 +1511,7 @@ function initializePaymentModal() {
 
     invoiceSelect?.addEventListener('change', function () {
         const invId = this.value;
-        const invoices = JSON.parse(localStorage.getItem('rmk_invoices') || '[]');
+        const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
         const invoice = invoices.find(inv => String(inv.id) === String(invId));
         if (invoice) fillPaymentDetails(invoice);
     });
@@ -1523,7 +1526,7 @@ function initializePaymentModal() {
             return;
         }
 
-        let invoices = JSON.parse(localStorage.getItem('rmk_invoices') || '[]');
+        let invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
         const invIndex = invoices.findIndex(inv => String(inv.id) === String(invId));
 
         if (invIndex !== -1) {
@@ -1591,7 +1594,7 @@ function saveInvoiceToStorage() {
         customerName = invCustomClientName.trim();
 
         // Auto Save to customers
-        const customers = JSON.parse(localStorage.getItem('rmk_customers') || '[]');
+        const customers = safeJsonParse(localStorage.getItem('rmk_customers'), []);
         const existing = customers.find(c => c.company.toLowerCase() === customerName.toLowerCase());
         if (!existing) {
             const customMobile = document.getElementById('invCustomClientMobile')?.value || '';
@@ -1663,7 +1666,7 @@ function saveInvoiceToStorage() {
     });
 
     // Find Customer Details for header
-    const savedCustomers = JSON.parse(localStorage.getItem('rmk_customers') || '[]');
+    const savedCustomers = safeJsonParse(localStorage.getItem('rmk_customers'), []);
     const customer = savedCustomers.find(c => c.company === customerName);
     let customerAddress = customer ? `${customer.city}, ${customer.state}` : 'N/A';
 
@@ -1719,7 +1722,7 @@ function saveInvoiceToStorage() {
         timestamp: new Date().toISOString()
     };
 
-    const invoices = JSON.parse(localStorage.getItem('rmk_invoices') || '[]');
+    const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
     invoices.unshift(invoiceData);
     localStorage.setItem('rmk_invoices', JSON.stringify(invoices));
 
@@ -1783,7 +1786,7 @@ function shareInvoiceOnWhatsApp() {
             const message = `*INVOICE DETAILS*\n\nHello *${customerName}*,\n\nYour invoice *${invNumber}* has been generated. I am sending the PDF bill as well.\n\n*Total Amount:* ${totalAmount}\n\nRegards,\n*RMK Fly Ash Bricks*`;
 
             // Find Customer Phone
-            const savedCustomers = JSON.parse(localStorage.getItem('rmk_customers') || '[]');
+            const savedCustomers = safeJsonParse(localStorage.getItem('rmk_customers'), []);
             const customer = savedCustomers.find(c => c.company === customerName);
             let phoneNumber = '';
 
@@ -1933,7 +1936,7 @@ function initializeFormCalculations() {
     if (custSelect) {
         custSelect.addEventListener('change', function () {
             const customerId = this.value;
-            const customers = JSON.parse(localStorage.getItem('rmk_customers') || '[]');
+            const customers = safeJsonParse(localStorage.getItem('rmk_customers'), []);
             const customer = customers.find(c => c.id === customerId || c.company === customerId);
             if (customer && taxType) {
                 taxType.value = (customer.state === 'Tamil Nadu') ? 'intra' : 'inter';
@@ -2058,7 +2061,7 @@ function printQuote() {
     const customerSelect = document.getElementById('quoteCustomerName');
     const customerId = customerSelect ? customerSelect.value : '';
     const quoteCustomClient = document.getElementById('quoteCustomClient')?.value || '';
-    const customers = JSON.parse(localStorage.getItem('rmk_customers') || '[]');
+    const customers = safeJsonParse(localStorage.getItem('rmk_customers'), []);
     const customer = customers.find(c => c.id === customerId || c.company === customerId);
 
     // Handle custom client name in quote
@@ -2296,13 +2299,110 @@ function initializeTableSearch() {
     });
 }
 
+// --- Workers Module Logic ---
+function initializeWorkersModule() {
+    console.log('Workers Module Initialized');
+    
+    const workerTableBody = document.getElementById('workerTableBody');
+    const totalWorkersCount = document.getElementById('totalWorkersCount');
+    const activeWorkersCount = document.getElementById('activeWorkersCount');
+    const monthlyPayroll = document.getElementById('monthlyPayroll');
+
+    const loadWorkers = () => {
+        const workers = safeJsonParse(localStorage.getItem('rmk_workers'), []);
+        if (workerTableBody) {
+            workerTableBody.innerHTML = '';
+            if (workers.length === 0) {
+                workerTableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem;">No workers found.</td></tr>`;
+            } else {
+                workers.forEach(w => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${w.workerId || w.id}</td>
+                        <td style="font-weight:600">${w.workerName || w.name}</td>
+                        <td><span class="status-badge secondary">${w.category}</span></td>
+                        <td>${w.phone}</td>
+                        <td><span class="status-badge in-stock">Active</span></td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="action-btn delete" onclick="deleteWorker('${w.id}')"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </td>
+                    `;
+                    workerTableBody.appendChild(tr);
+                });
+            }
+        }
+        
+        if (totalWorkersCount) totalWorkersCount.textContent = workers.length;
+        if (activeWorkersCount) activeWorkersCount.textContent = workers.length;
+        if (monthlyPayroll) monthlyPayroll.textContent = '₹' + (workers.length * 15000).toLocaleString('en-IN');
+    };
+
+    loadWorkers();
+
+    const addWorkerBtn = document.getElementById('addWorkerBtn');
+    const workerModal = document.getElementById('addWorkerModal');
+    const closeWorkerModal = document.getElementById('closeWorkerModal');
+    const cancelWorkerBtn = document.getElementById('cancelWorkerBtn');
+    const workerForm = document.getElementById('addWorkerForm');
+
+    if (addWorkerBtn && workerModal) {
+        addWorkerBtn.addEventListener('click', () => workerModal.classList.add('active'));
+        const close = () => workerModal.classList.remove('active');
+        if (closeWorkerModal) closeWorkerModal.addEventListener('click', close);
+        if (cancelWorkerBtn) cancelWorkerBtn.addEventListener('click', close);
+
+        if (workerForm) {
+            workerForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const formData = new FormData(workerForm);
+                const workers = safeJsonParse(localStorage.getItem('rmk_workers'), []);
+                workers.push({
+                    id: Date.now().toString(),
+                    workerId: formData.get('workerId'),
+                    workerName: formData.get('workerName'),
+                    category: formData.get('category'),
+                    phone: formData.get('phone'),
+                    joinDate: formData.get('joinDate'),
+                    address: formData.get('address')
+                });
+                localStorage.setItem('rmk_workers', JSON.stringify(workers));
+                showToast('Worker added successfully');
+                workerForm.reset();
+                close();
+                loadWorkers();
+            });
+        }
+    }
+}
+
+window.deleteWorker = function(id) {
+    if (confirm('Delete this worker?')) {
+        let workers = safeJsonParse(localStorage.getItem('rmk_workers'), []);
+        workers = workers.filter(w => String(w.id) !== String(id));
+        localStorage.setItem('rmk_workers', JSON.stringify(workers));
+        showToast('Worker removed');
+        const path = window.location.pathname;
+        if (path.includes('admin-workers.html') || path.includes('admin_workers.html')) {
+            initializeWorkersModule();
+        }
+    }
+};
+
+// --- Attendance Module Logic ---
+function initializeAttendanceModule() {
+    console.log('Attendance Module Initialized');
+    // Implement simple attendance table loader if necessary
+}
+
 // --- Customers Module Logic ---
 function initializeCustomersModule() {
     console.log('Customers Module Initialized');
     initializeTableSearch();
 
     // Load Saved Customers
-    const savedCustomers = JSON.parse(localStorage.getItem('rmk_customers') || '[]');
+    const savedCustomers = safeJsonParse(localStorage.getItem('rmk_customers'), []);
     const tableBody = document.querySelector('.data-table tbody');
 
     if (savedCustomers.length > 0) {
@@ -2417,7 +2517,7 @@ function initializeCustomersModule() {
                 };
 
                 // Save to Storage
-                const customers = JSON.parse(localStorage.getItem('rmk_customers') || '[]');
+                const customers = safeJsonParse(localStorage.getItem('rmk_customers'), []);
                 customers.unshift(newCustomer);
                 localStorage.setItem('rmk_customers', JSON.stringify(customers));
 
@@ -2500,7 +2600,7 @@ function initializeProductsModule() {
     initializeTableSearch();
 
     // Load Saved Products
-    const savedProducts = JSON.parse(localStorage.getItem('rmk_products') || '[]');
+    const savedProducts = safeJsonParse(localStorage.getItem('rmk_products'), []);
     const tableBody = document.querySelector('.data-table tbody');
 
     if (savedProducts.length > 0) {
@@ -2559,7 +2659,7 @@ function initializeProductsModule() {
                 };
 
                 // Save to Storage
-                const products = JSON.parse(localStorage.getItem('rmk_products') || '[]');
+                const products = safeJsonParse(localStorage.getItem('rmk_products'), []);
                 products.unshift(newProduct);
                 localStorage.setItem('rmk_products', JSON.stringify(products));
 
@@ -2680,6 +2780,13 @@ function initializeInventoryModule() {
     };
 
     populateInitial();
+
+    const btnStockHistory = document.getElementById('btnStockHistory');
+    if (btnStockHistory) {
+        btnStockHistory.addEventListener('click', () => {
+            alert('Stock history feature coming soon! All modifications are safely logged in the master ledger.');
+        });
+    }
 
     // Initializers
     if (updateStockBtn && stockModal) {
@@ -2882,7 +2989,7 @@ function initializeReportsModule() {
     const exportGstBtn = document.getElementById('exportGstBtn');
     if (exportGstBtn) {
         exportGstBtn.addEventListener('click', function () {
-            const invoices = JSON.parse(localStorage.getItem('rmk_invoices') || '[]');
+            const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
             if (invoices.length === 0) {
                 showToast('No invoice data to export', 'warning');
                 return;
@@ -2929,9 +3036,6 @@ function initializeReportsModule() {
             });
 
             const encodedUri = encodeURI(csvContent);
-            const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-            const currentMonth = months[new Date().getMonth()];
-            const currentYear = new Date().getFullYear();
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
             link.setAttribute("download", `GST_Report_${currentMonth}_${currentYear}.csv`);
@@ -2945,8 +3049,8 @@ function initializeReportsModule() {
     const exportAttendanceBtn = document.getElementById('exportAttendanceBtn');
     if (exportAttendanceBtn) {
         exportAttendanceBtn.addEventListener('click', function () {
-            const workers = JSON.parse(localStorage.getItem('rmk_workers') || '[]');
-            const attendanceData = JSON.parse(localStorage.getItem('rmk_attendance') || '{}');
+            const workers = safeJsonParse(localStorage.getItem('rmk_workers'), []);
+            const attendanceData = safeJsonParse(localStorage.getItem('rmk_attendance'), {});
             
             if (workers.length === 0) {
                 showToast('No worker data to export', 'warning');
@@ -3020,7 +3124,7 @@ function populateGstSummary() {
     const tableBody = document.querySelector('#gstSummaryTable tbody');
     if (!tableBody) return;
 
-    const invoices = JSON.parse(localStorage.getItem('rmk_invoices') || '[]');
+    const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
     if (invoices.length === 0) return;
 
     // Group by month
@@ -3066,7 +3170,7 @@ function loadInvoicesToTable() {
     const tableBody = document.querySelector('#invoices .data-table tbody');
     if (!tableBody) return;
 
-    const invoices = JSON.parse(localStorage.getItem('rmk_invoices') || '[]');
+    const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
 
     // Update Billing Stats - Show TOTAL Billed Revenue for better visibility
     const totalRevenue = invoices.reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0);
@@ -3126,7 +3230,7 @@ function loadQuotesToTable() {
     const tableBody = document.querySelector('#quotes .data-table tbody');
     if (!tableBody) return;
 
-    const quotes = JSON.parse(localStorage.getItem('rmk_quotes') || '[]');
+    const quotes = safeJsonParse(localStorage.getItem('rmk_quotes'), []);
     
     // Update Stats for quotes
     const stats = document.querySelectorAll('.stats-grid .stat-card');
@@ -3228,6 +3332,14 @@ function initializeSettingsModule() {
         });
     }
 
+    const phoneInput = document.getElementById('companyPhoneInput');
+    const websiteInput = document.getElementById('companyWebsiteInput');
+    const addressInput = document.getElementById('companyAddressInput');
+
+    if (phoneInput) phoneInput.value = localStorage.getItem('companyPhone') || '+91 99520 68848';
+    if (websiteInput) websiteInput.value = localStorage.getItem('companyWebsite') || 'https://rmkgroups.in';
+    if (addressInput) addressInput.value = localStorage.getItem('companyAddress') || '123, Ariyalur Main Road, Perambalur, Tamil Nadu';
+
     // Save settings
     const saveBtn = document.getElementById('saveSettingsBtn');
     if (saveBtn) {
@@ -3235,6 +3347,9 @@ function initializeSettingsModule() {
             if (nameInput) localStorage.setItem('companyName', nameInput.value);
             if (gstInput) localStorage.setItem('companyGst', gstInput.value);
             if (emailInput) localStorage.setItem('companyEmail', emailInput.value);
+            if (phoneInput) localStorage.setItem('companyPhone', phoneInput.value);
+            if (websiteInput) localStorage.setItem('companyWebsite', websiteInput.value);
+            if (addressInput) localStorage.setItem('companyAddress', addressInput.value);
 
             showToast('Settings saved successfully', 'success');
         });
@@ -3257,7 +3372,7 @@ document.addEventListener('click', function (e) {
         const type = row.dataset.type;
 
         if (type === 'invoice') {
-            const invoices = JSON.parse(localStorage.getItem('rmk_invoices') || '[]');
+            const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
             const invoice = invoices.find(inv => inv.id == id);
             if (invoice) {
                 sessionStorage.setItem('view_invoice_data', JSON.stringify(invoice));
@@ -3290,7 +3405,7 @@ document.addEventListener('click', function (e) {
 
             if (id && type) {
                 if (type === 'customer') {
-                    let data = JSON.parse(localStorage.getItem('rmk_customers') || '[]');
+                    let data = safeJsonParse(localStorage.getItem('rmk_customers'), []);
                     const updated = data.filter(item => item.id !== id);
                     localStorage.setItem('rmk_customers', JSON.stringify(updated));
 
@@ -3307,7 +3422,7 @@ document.addEventListener('click', function (e) {
                         tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem;">No customers found.</td></tr>`;
                     }
                 } else if (type === 'product') {
-                    let data = JSON.parse(localStorage.getItem('rmk_products') || '[]');
+                    let data = safeJsonParse(localStorage.getItem('rmk_products'), []);
                     const updated = data.filter(item => item.id !== id);
                     localStorage.setItem('rmk_products', JSON.stringify(updated));
 
@@ -3317,7 +3432,7 @@ document.addEventListener('click', function (e) {
                         tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem;">No products found.</td></tr>`;
                     }
                 } else if (type === 'invoice') {
-                    let data = JSON.parse(localStorage.getItem('rmk_invoices') || '[]');
+                    let data = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
                     const updated = data.filter(item => item.id != id);
                     localStorage.setItem('rmk_invoices', JSON.stringify(updated));
 
@@ -3327,7 +3442,7 @@ document.addEventListener('click', function (e) {
                     }
                     if (typeof loadInvoicesToTable === 'function') loadInvoicesToTable();
                 } else if (type === 'quote') {
-                    let data = JSON.parse(localStorage.getItem('rmk_quotes') || '[]');
+                    let data = safeJsonParse(localStorage.getItem('rmk_quotes'), []);
                     const updated = data.filter(item => item.id != id);
                     localStorage.setItem('rmk_quotes', JSON.stringify(updated));
 
@@ -3337,7 +3452,7 @@ document.addEventListener('click', function (e) {
                     }
                     if (typeof loadQuotesToTable === 'function') loadQuotesToTable();
                 } else if (type === 'worker') {
-                    let data = JSON.parse(localStorage.getItem('rmk_workers') || '[]');
+                    let data = safeJsonParse(localStorage.getItem('rmk_workers'), []);
                     const updated = data.filter(item => item.id !== id);
                     localStorage.setItem('rmk_workers', JSON.stringify(updated));
                     updateWorkerStats(updated);
@@ -3381,7 +3496,7 @@ function initializeUserManagementModule() {
         const role = document.getElementById('newUserRole').value;
 
         // Check if user already exists
-        let users = JSON.parse(localStorage.getItem('rmk_users') || '[]');
+        let users = safeJsonParse(localStorage.getItem('rmk_users'), []);
         if (users.find(u => u.userId === userId)) {
             showToast('User ID already exists', 'error');
             return;
@@ -3413,7 +3528,7 @@ function initializeUserManagementModule() {
             const userId = tr.cells[0].textContent;
 
             if (confirm(`Are you sure you want to delete user "${userId}"?`)) {
-                let users = JSON.parse(localStorage.getItem('rmk_users') || '[]');
+                let users = safeJsonParse(localStorage.getItem('rmk_users'), []);
                 users = users.filter(u => u.id !== id);
                 localStorage.setItem('rmk_users', JSON.stringify(users));
                 tr.remove();
@@ -3427,7 +3542,7 @@ function loadAdminUsers() {
     const tableBody = document.getElementById('usersTableBody');
     if (!tableBody) return;
 
-    let users = JSON.parse(localStorage.getItem('rmk_users') || '[]');
+    let users = safeJsonParse(localStorage.getItem('rmk_users'), []);
 
     // Default admin if none exist
     if (users.length === 0) {
@@ -3539,7 +3654,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const resetQt = e.target.closest('#btnResetQtCounter');
 
         if (resetInv) {
-            const invoices = JSON.parse(localStorage.getItem('rmk_invoices') || '[]');
+            const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
             const now = new Date();
             const month = now.getMonth();
             const year = now.getFullYear();
