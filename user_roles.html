@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Roles - RMK Groups</title>
+    <link rel="stylesheet" href="admin.css">
+    <style>
+        .roles-container {
+            max-width: 1000px;
+            margin: 50px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .role-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .role-card {
+            padding: 25px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .role-card:hover {
+            border-color: #064E3B;
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(6, 78, 59, 0.15);
+        }
+        .role-card.selected {
+            border-color: #064E3B;
+            background: linear-gradient(135deg, #064E3B, #065F46);
+            color: white;
+        }
+        .role-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            color: #064E3B;
+        }
+        .role-card.selected .role-icon {
+            color: white;
+        }
+        .role-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .role-description {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        .user-info {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #064E3B, #065F46);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+        }
+        .success-message {
+            background: #10B981;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin-top: 20px;
+            display: none;
+        }
+        .online-users {
+            background: #f0f9ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="roles-container">
+        <div class="settings-header">
+            <h1>Select Your Role</h1>
+            <p>Choose your role to join the real-time workspace</p>
+        </div>
+
+        <div class="user-info">
+            <div class="form-group">
+                <label for="userName">Your Name *</label>
+                <input type="text" id="userName" placeholder="Enter your name" required>
+            </div>
+        </div>
+
+        <div class="role-selector">
+            <div class="role-card" data-role="owner">
+                <div class="role-icon">??</div>
+                <div class="role-title">Owner</div>
+                <div class="role-description">Full access to all features and billing data</div>
+            </div>
+            
+            <div class="role-card" data-role="admin">
+                <div class="role-icon">??</div>
+                <div class="role-title">Admin</div>
+                <div class="role-description">Manage billing, customers, and invoices</div>
+            </div>
+            
+            <div class="role-card" data-role="team">
+                <div class="role-icon">??</div>
+                <div class="role-title">Team Member</div>
+                <div class="role-description">View and create invoices with limited access</div>
+            </div>
+        </div>
+
+        <button class="btn-primary" id="joinWorkspaceBtn">Join Workspace</button>
+
+        <div class="success-message" id="successMessage">
+            Role assigned successfully! Redirecting to dashboard...
+        </div>
+
+        <div class="online-users">
+            <h3>Active Users</h3>
+            <div id="onlineUsersList">No users online yet</div>
+        </div>
+    </div>
+
+    <script>
+        window.io = function() {
+            return {
+                on: function(event, callback) {
+                    console.log('Socket stub event handler mapped:', event);
+                },
+                emit: function(event, data) {
+                    console.log('Socket stub event emission triggered:', event);
+                }
+            };
+        };
+        let selectedRole = null;
+        
+        // Role selection
+        document.querySelectorAll('.role-card').forEach(card => {
+            card.addEventListener('click', function() {
+                document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
+                this.classList.add('selected');
+                selectedRole = this.dataset.role;
+            });
+        });
+
+        // Join workspace
+        document.getElementById('joinWorkspaceBtn').addEventListener('click', function() {
+            const userName = document.getElementById('userName').value.trim();
+            
+            if (!userName) {
+                alert('Please enter your name');
+                return;
+            }
+            
+            if (!selectedRole) {
+                alert('Please select a role');
+                return;
+            }
+
+            // Save user session
+            const userSession = {
+                userId: 'user_' + Date.now(),
+                name: userName,
+                role: selectedRole,
+                joinedAt: new Date().toISOString()
+            };
+            
+            localStorage.setItem('rmk_session', JSON.stringify(userSession));
+            
+            // Show success message
+            const successMsg = document.getElementById('successMessage');
+            successMsg.style.display = 'block';
+            
+            // Redirect to billing page
+            setTimeout(() => {
+                window.location.href = 'admin-billing.html';
+            }, 2000);
+        });
+
+        function updateOnlineUsers() {
+            console.log('Offline simulation active.');
+        }
+    </script>
+</body>
+</html>

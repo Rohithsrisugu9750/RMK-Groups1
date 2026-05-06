@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Gallery | RMK Groups</title>
+    <meta name="description" content="Visual showcase of RMK Groups' manufacturing facilities and project completions.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="logo.png">
+</head>
+
+<body>
+    <div class="preloader">
+        <div class="loader-content">
+            <img src="logo.png" alt="RMK Groups" class="loader-logo">
+            <div class="logo-text" style="color: var(--primary); font-size: 1.8rem; text-align: center;">RMK <span>GROUPS</span></div>
+        </div>
+    </div>
+
+    <header id="main-header">
+                <div class="top-bar">
+            <div class="container">
+                <div class="top-bar-left">
+                    <a href="https://www.facebook.com/karthickrajaRMK" target="_blank"><i class="fab fa-facebook-f"></i></a>
+                    <a href="https://www.instagram.com/rmk_groups_perambalur/" target="_blank"><i class="fab fa-instagram"></i></a>
+                    <span><i class="fas fa-envelope"></i> rmkgroups1987@gmail.com</span>
+                </div>
+                <div class="top-bar-right">
+                    <span><i class="fas fa-phone-alt"></i> Customer Care: 8248838593</span>
+                </div>
+            </div>
+        </div>
+        <div class="header-main">
+            <nav>
+                <a href="index.html" class="logo-text" style="display: flex; align-items: center; gap: 12px;">
+                    <img src="logo.png" alt="RMK Groups" style="height: 60px; width: auto;">
+                    <span>RMK <span>GROUPS</span></span>
+                </a>
+                <ul class="nav-links">
+                    <li><a href="index.html">Home</a></li>
+                    <li><a href="about.html">About</a></li>
+                    <li>
+                        <a href="services.html" class="dropdown-toggle">Services <i class="fas fa-chevron-down"></i></a>
+                        <ul class="dropdown-menu">
+                            <li><a href="services.html">All Products</a></li>
+                            <li><a href="construction.html">Construction Solutions</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="clients.html">Clients</a></li>
+                    <li>
+                        <a href="gallery.html" class="dropdown-toggle">Gallery <i class="fas fa-chevron-down"></i></a>
+                        <ul class="dropdown-menu">
+                            <li><a href="gallery.html">Project Showcase</a></li>
+                            <li><a href="achievements.html">Our Achievements</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="contact.html">Contact</a></li>
+                </ul>
+                
+                <div class="mobile-toggle" id="mobile-toggle">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <div class="nav-links-mobile" id="nav-mobile">
+        <a href="index.html">Home</a>
+        <a href="about.html">About</a>
+        <a href="services.html">Services</a>
+        <a href="construction.html">Construction</a>
+        <a href="clients.html">Clients</a>
+        <a href="gallery.html">Gallery</a>
+        <a href="achievements.html">Achievements</a>
+        <a href="contact.html">Contact</a>
+    </div>
+    <div class="mobile-overlay-blur" id="mobile-blur"></div>
+
+    <main>
+        <section class="hero hero-inner">
+            <div class="hero-bg" style="background: var(--primary-dark);"></div>
+            <div class="hero-content">
+                <span class="badge reveal">Portfolio</span>
+                <h1 class="reveal reveal-delay-1">Project <span style="color: var(--primary-light)">Gallery.</span></h1>
+                <p class="reveal reveal-delay-2">A visual record of our industrial excellence and project success.</p>
+            </div>
+        </section>
+
+        <section class="section-padding">
+            <div class="container">
+                <style>
+                    .gallery-item {
+                        position: relative;
+                        overflow: hidden;
+                        border-radius: 12px;
+                        height: 300px;
+                        box-shadow: var(--shadow-md);
+                        cursor: pointer;
+                        transition: var(--transition);
+                    }
+
+                    .gallery-item img {
+                        width: 100%;
+                        height: 100%;
+                        object-fit: cover;
+                        transition: transform 0.6s cubic-bezier(0.165, 0.84, 0.44, 1);
+                    }
+
+                    .gallery-item:hover img {
+                        transform: scale(1.08);
+                    }
+
+                    .gallery-item-overlay {
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: linear-gradient(to bottom, transparent 40%, rgba(6, 78, 59, 0.8));
+                        opacity: 0;
+                        transition: opacity 0.4s ease;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: flex-end;
+                        padding: 1.5rem;
+                        color: white;
+                    }
+
+                    .gallery-item:hover .gallery-item-overlay {
+                        opacity: 1;
+                    }
+
+                    .gallery-item-overlay h4 {
+                        color: white;
+                        margin: 0;
+                        font-size: 1.1rem;
+                        transform: translateY(20px);
+                        transition: transform 0.4s ease;
+                    }
+
+                    .gallery-item:hover .gallery-item-overlay h4 {
+                        transform: translateY(0);
+                    }
+                </style>
+                <div class="gallery-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 2rem;">
+                    <div class="gallery-item reveal">
+                        <img src="gallery-1.jpg" alt="Manufacturing Unit">
+                        <div class="gallery-item-overlay">
+                            <h4>Automatic Brick Machine</h4>
+                        </div>
+                    </div>
+                    <div class="gallery-item reveal reveal-delay-1">
+                        <img src="gallery-2.jpg" alt="Fly Ash Bricks">
+                        <div class="gallery-item-overlay">
+                            <h4>Quality Bricks Production</h4>
+                        </div>
+                    </div>
+                    <div class="gallery-item reveal reveal-delay-2">
+                        <img src="gallery-3.jpg" alt="Factory Floor">
+                        <div class="gallery-item-overlay">
+                            <h4>Industrial Excellence</h4>
+                        </div>
+                    </div>
+                    <div class="gallery-item reveal">
+                        <img src="gallery-4.jpg" alt="Logistics">
+                        <div class="gallery-item-overlay">
+                            <h4>Bulk Delivery Service</h4>
+                        </div>
+                    </div>
+                    <div class="gallery-item reveal reveal-delay-1">
+                        <img src="gallery-5.jpg" alt="Production Team">
+                        <div class="gallery-item-overlay">
+                            <h4>Skilled Workforce</h4>
+                        </div>
+                    </div>
+                    <div class="gallery-item reveal reveal-delay-2">
+                        <img src="gallery-6.jpg" alt="Product Launch">
+                        <div class="gallery-item-overlay">
+                            <h4>Ready for Dispatch</h4>
+                        </div>
+                    </div>
+                    <div class="gallery-item reveal">
+                        <img src="gallery-7.jpg" alt="Warehouse">
+                        <div class="gallery-item-overlay">
+                            <h4>Large Inventory</h4>
+                        </div>
+                    </div>
+                    <div class="gallery-item reveal reveal-delay-1">
+                        <img src="gallery-8.jpg" alt="Factory View">
+                        <div class="gallery-item-overlay">
+                            <h4>Manufacturing Facility</h4>
+                        </div>
+                    </div>
+                    <div class="gallery-item reveal reveal-delay-2">
+                        <img src="gallery-9.jpg" alt="Machinery">
+                        <div class="gallery-item-overlay">
+                            <h4>Advanced Technology</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Floating Widget -->
+    <div class="floating-widget">
+        <a href="#" class="floating-btn">
+            <i class="fab fa-whatsapp"></i>
+            <span>How can we help you?</span>
+        </a>
+    </div>
+
+    <footer>
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-col">
+                    <a href="index.html" class="logo-text" style="margin-bottom: 2rem; display: flex; align-items: center; gap: 10px;">
+                        <img src="logo.png" alt="RMK Groups" style="height: 50px; width: auto; filter: brightness(0) invert(1);">
+                        <span style="color: white;">RMK <span style="color: var(--primary-light);">GROUPS</span></span>
+                    </a>
+                    <p style="line-height: 1.8; margin-bottom: 2rem;">Pioneering industrial sustainability since 1987.
+                        We deliver high-performance construction materials across India.</p>
+                    <div class="footer-socials">
+                        <a href="https://www.facebook.com/karthickrajaRMK" target="_blank" class="footer-social-link"><i class="fab fa-facebook-f"></i></a>
+                        
+                        
+                        <a href="https://www.instagram.com/rmk_groups_perambalur/" target="_blank" class="footer-social-link"><i class="fab fa-instagram"></i></a>
+                    </div>
+                </div>
+                                <div class="footer-col">
+                    <h4>Corporate</h4>
+                    <ul class="footer-links">
+                        <li><a href="index.html">Home</a></li>
+                        <li><a href="about.html">About Us</a></li>
+                        <li><a href="achievements.html">Our Achievements</a></li>
+                        <li><a href="clients.html">Our Clients</a></li>
+                        <li><a href="gallery.html">Project Gallery</a></li>
+                        <li><a href="contact.html">Contact Us</a></li>
+                        <li><a href="login.html">Admin Login</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Solutions</h4>
+                    <ul class="footer-links">
+                        <li><a href="services.html">Fly Ash Bricks</a></li>
+                        <li><a href="services.html">Paver Blocks</a></li>
+                        <li><a href="construction.html">Civil Engineering</a></li>
+                        <li><a href="services.html">Aggregates</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Contact Us</h4>
+                    <ul class="footer-links">
+                        <li><i class="fas fa-map-marker-alt"
+                                style="margin-right: 10px; color: var(--primary-light);"></i> Ariyalur Main Road,
+                            Perambalur</li>
+                        <li><i class="fas fa-headset" style="margin-right: 10px; color: var(--primary-light);"></i> Customer Care: 82488 38593</li>
+                        <li><i class="fas fa-phone" style="margin-right: 10px; color: var(--primary-light);"></i> +91
+                            99520 68848</li>
+                        <li><i class="fas fa-envelope" style="margin-right: 10px; color: var(--primary-light);"></i>
+                            rmkgroups1987@gmail.com</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 RMK Groups . All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
+
+
+
+
+
+
+
+
+
+

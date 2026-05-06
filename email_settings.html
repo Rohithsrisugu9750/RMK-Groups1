@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Settings - RMK Groups</title>
+    <link rel="stylesheet" href="admin.css">
+    <style>
+        .settings-container {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .settings-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .settings-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .form-group label {
+            font-weight: 600;
+            color: #333;
+        }
+        .form-group input {
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #064E3B;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #064E3B, #065F46);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+        }
+        .success-message {
+            background: #10B981;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin-top: 20px;
+            display: none;
+        }
+        .info-box {
+            background: #f0f9ff;
+            border-left: 4px solid #064E3B;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="settings-container">
+        <div class="settings-header">
+            <h1>Email Settings</h1>
+            <p>Configure where all invoices and quotes are sent</p>
+        </div>
+
+        <div class="info-box">
+            <strong>Important:</strong> All invoices will be sent to the email address configured below. 
+            Individual customer emails will no longer be used.
+        </div>
+
+        <form class="settings-form" id="emailSettingsForm">
+            <div class="form-group">
+                <label for="adminEmail">Admin Email Address *</label>
+                <input type="email" id="adminEmail" name="adminEmail" required 
+                       placeholder="admin@rmkgroups.in" value="admin@rmkgroups.in">
+            </div>
+
+            <div class="form-group">
+                <label for="adminWhatsApp">Admin WhatsApp Number</label>
+                <input type="tel" id="adminWhatsApp" name="adminWhatsApp" 
+                       placeholder="+919876543210" value="+919876543210">
+            </div>
+
+            <div class="form-group">
+                <label for="fromEmail">From Email Address</label>
+                <input type="email" id="fromEmail" name="fromEmail" 
+                       placeholder="billing@rmkgroups.in" value="billing@rmkgroups.in">
+            </div>
+
+            <div class="form-group">
+                <label for="replyToEmail">Reply-To Email Address</label>
+                <input type="email" id="replyToEmail" name="replyToEmail" 
+                       placeholder="support@rmkgroups.in" value="support@rmkgroups.in">
+            </div>
+
+            <button type="submit" class="btn-primary">Save Settings</button>
+        </form>
+
+        <div class="success-message" id="successMessage">
+            Email settings saved successfully!
+        </div>
+    </div>
+
+    <script src="email_config.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load current settings
+            const config = window.EMAIL_CONFIG;
+            if (config) {
+                document.getElementById('adminEmail').value = config.adminEmail || '';
+                document.getElementById('adminWhatsApp').value = config.adminWhatsApp || '';
+                document.getElementById('fromEmail').value = config.emailSettings?.from || '';
+                document.getElementById('replyToEmail').value = config.emailSettings?.replyTo || '';
+            }
+
+            // Handle form submission
+            document.getElementById('emailSettingsForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Get form values
+                const formData = new FormData(this);
+                const settings = {
+                    adminEmail: formData.get('adminEmail'),
+                    adminWhatsApp: formData.get('adminWhatsApp'),
+                    emailSettings: {
+                        from: formData.get('fromEmail'),
+                        replyTo: formData.get('replyToEmail')
+                    }
+                };
+
+                // Save to localStorage (in production, this would save to server)
+                localStorage.setItem('rmk_email_settings', JSON.stringify(settings));
+                
+                // Show success message
+                const successMsg = document.getElementById('successMessage');
+                successMsg.style.display = 'block';
+                
+                // Hide after 3 seconds
+                setTimeout(() => {
+                    successMsg.style.display = 'none';
+                }, 3000);
+
+                console.log('Email settings saved:', settings);
+            });
+        });
+    </script>
+</body>
+</html>

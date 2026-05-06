@@ -1,0 +1,18 @@
+{
+  "name": "rmk-groups-backend",
+  "version": "1.0.0",
+  "description": "Cloud Sync Backend for RMK Groups Admin",
+  "main": "server.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node app.js"
+
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.18.2",
+    "mysql2": "^3.22.0",
+    "socket.io": "^4.8.3"
+  }
+}

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | RMK Groups - GST Invoice System</title>
+    <meta name="description" content="Secure login for RMK Groups GST Invoice Management System">
+
+    <!-- Google Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="login.css">
+</head>
+
+<body>
+    <div class="login-container">
+        <!-- Logo/Branding Section -->
+        <div class="login-branding">
+            <div class="brand-badge">
+                <i class="fas fa-building"></i>
+            </div>
+            <h1>RMK<span>Groups</span></h1>
+            <p>GST Invoice Management System</p>
+        </div>
+
+        <!-- Login Card -->
+        <div class="login-card">
+            <div class="card-header">
+                <h2>Welcome Back</h2>
+                <p>Please enter your credentials to continue</p>
+            </div>
+
+            <form id="loginForm">
+                <!-- Username Field -->
+                <div class="form-group">
+                    <label for="username">Username or Email</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-envelope"></i>
+                        <input type="text" id="username" placeholder="admin@rmkgroups.in" required>
+                    </div>
+                </div>
+
+                <!-- Password Field -->
+                <div class="form-group">
+                    <div class="label-row">
+                        <label for="password">Password</label>
+                        <a href="#" class="forgot-link" id="forgotPassword">Forgot Password?</a>
+                    </div>
+                    <div class="input-wrapper">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="password" placeholder="••••••••" required>
+                        <button type="button" class="password-toggle" id="togglePassword">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Error Message Container (Hidden by default) -->
+                <div class="error-container" id="errorContainer">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="errorMessage">Invalid username or password</span>
+                </div>
+
+                <!-- Login Button -->
+                <button type="submit" class="btn-login" id="loginBtn">
+                    <span>Sign In</span>
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+            </form>
+
+            <!-- Role Hints (For Demo Purposes) -->
+            <div class="login-footer">
+                <p>RMK Groups Industrial Ledger v2.0</p>
+                <p style="margin-top: 5px; font-size: 0.8rem; opacity: 0.7;">Customer Care: 8248838593</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="login.js"></script>
+</body>
+
+</html>

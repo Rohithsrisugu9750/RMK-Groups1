@@ -1,0 +1,12 @@
+# Final Attempt for Hostinger
+PassengerEnabled on
+PassengerAppType node
+PassengerStartupFile app.js
+
+RewriteEngine On
+RewriteCond %{REQUEST_URI} ^/api [NC]
+RewriteRule ^(.*)$ app.js/$1 [L]
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ app.js/$1 [L]

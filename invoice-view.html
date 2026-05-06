@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Invoice | RMK Fly Ash Bricks</title>
+    <!-- Same fonts as admin -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="admin.css">
+    <style>
+        :root {
+            --bill-primary: #064E3B;
+            --bill-border: #000;
+        }
+
+        body {
+            background-color: #f0f2f5;
+            padding: 2rem;
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .actions-bar {
+            width: 210mm;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        /* Bill Styles */
+        .invoice-container {
+            background: white;
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            color: #000;
+            position: relative;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+        }
+
+        .bill-header {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 2.5px solid var(--bill-primary);
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        .company-info h1 {
+            color: var(--bill-primary);
+            margin: 0 0 5px 0;
+            font-size: 26px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .company-info p {
+            margin: 2px 0;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .bill-meta {
+            text-align: right;
+        }
+
+        .bill-meta h2 {
+            font-size: 32px;
+            margin: 0;
+            color: var(--bill-primary);
+            letter-spacing: 2px;
+            font-weight: 900;
+        }
+
+        .bill-meta p {
+            margin: 5px 0;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .bill-to-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 25px;
+            gap: 20px;
+        }
+
+        .bill-box {
+            flex: 1;
+            border: 1.5px solid #000;
+            padding: 12px;
+            border-radius: 4px;
+        }
+
+        .bill-box h3 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #000;
+            text-transform: uppercase;
+            border-bottom: 1.5px solid #000;
+            padding-bottom: 5px;
+            font-weight: 800;
+        }
+
+        .bill-box p {
+            margin: 4px 0;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .bill-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        .bill-table th {
+            background: #eee !important;
+            border: 1.5px solid #000;
+            padding: 10px;
+            font-size: 12px;
+            text-transform: uppercase;
+            font-weight: 800;
+            -webkit-print-color-adjust: exact;
+        }
+
+        .bill-table td {
+            border: 1.5px solid #000;
+            padding: 12px 10px;
+            font-size: 13px;
+        }
+
+        .totals-section {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .totals-table {
+            width: 320px;
+            border-collapse: collapse;
+        }
+
+        .totals-table td {
+            padding: 10px 12px;
+            border: 1.5px solid #000;
+            font-size: 14px;
+        }
+
+        .totals-table td:first-child {
+            font-weight: 800;
+            background: #eee !important;
+            text-transform: uppercase;
+            font-size: 12px;
+            -webkit-print-color-adjust: exact;
+        }
+
+        .grand-total-row td {
+            background: #f8f9fa !important;
+            color: #000 !important;
+            font-weight: 900 !important;
+            font-size: 18px !important;
+            -webkit-print-color-adjust: exact;
+        }
+
+        .bill-footer {
+            margin-top: 50px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .terms-box {
+            max-width: 60%;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .terms-box strong {
+            text-decoration: underline;
+        }
+
+        .sign-box {
+            text-align: center;
+            width: 220px;
+        }
+
+        .sign-line {
+            border-top: 1.5px solid #000;
+            margin-top: 60px;
+            padding-top: 5px;
+            font-weight: 800;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+
+        @media print {
+            body { background: white; padding: 0; }
+            .actions-bar, .admin-footer { display: none; }
+            .invoice-container { box-shadow: none; margin: 0; border: none; }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="actions-bar">
+        <button onclick="window.close()" class="btn btn-secondary" style="border: 1.5px solid #000;">
+            <i class="fas fa-times"></i> Close
+        </button>
+        <div>
+            <button id="downloadPdfBtn" class="btn btn-outline" style="margin-right: 10px; border: 1.5px solid #064E3B; color: #064E3B; font-weight: 800;">
+                <i class="fas fa-file-pdf"></i> Download PDF
+            </button>
+            <button onclick="window.print()" class="btn btn-primary" style="background: #064E3B; border: 1.5px solid #064E3B; font-weight: 800;">
+                <i class="fas fa-print"></i> Print Invoice
+            </button>
+        </div>
+    </div>
+
+    <div class="invoice-container" id="printableInvoice">
+        <!-- Professional Header -->
+        <div class="bill-header">
+            <div class="company-info">
+                <h1 style="display: inline-block; text-align: center; margin: 0;">R.M.K<br><span style="font-size: 0.85em;">FLYASH BRICKS & PAVER BLOCK</span></h1>
+                <p>SFNO:281/5A, ARIYALUR MAIN ROAD, KAULPALAYAM, THURAIMANGALAM - POST, PERAMBALUR - 621 220</p>
+                <p style="font-size: 24px; font-weight: 900; margin-top: 10px; margin-bottom: 10px; color: #000;">GSTIN-33CFVPK8449D1ZO</p>
+                <p><strong>Phone:</strong> +91 99520 68848 | 82488 38593</p>
+                <p><strong>Email:</strong> rmkgroups1987@gmail.com</p>
+            </div>
+            <div class="bill-meta">
+                <h2 id="pDocTitle">TAX INVOICE</h2>
+                <p style="font-size: 18px; white-space: nowrap;">No: <span id="pInvNumber" style="color:#d93025; font-weight: 900;"></span></p>
+                <p>Date: <span id="pInvDate"></span></p>
+            </div>
+        </div>
+
+        <!-- Bill To & Details -->
+        <div class="bill-to-section">
+            <div class="bill-box">
+                <h3>Customer Details (Bill To)</h3>
+                <p id="pCustomerName" style="font-weight: 900; font-size: 16px; margin-bottom: 5px;"></p>
+                <p id="pCustomerAddress"></p>
+                <p id="pCustomerPhoneContainer" style="display:none;"><strong>Mobile:</strong> <span id="pCustomerPhone"></span></p>
+                <p id="pCustomerGstContainer" style="display:none;"><strong>GSTIN:</strong> <span id="pCustomerGst"></span></p>
+            </div>
+        </div>
+
+        <!-- Items Table -->
+        <table class="bill-table">
+            <thead>
+                <tr>
+                    <th style="width: 50px;">S.No</th>
+                    <th>Product Description</th>
+                    <th style="width: 100px; text-align: center;">Qty</th>
+                    <th style="width: 120px; text-align: right;">Rate (₹)</th>
+                    <th style="width: 150px; text-align: right;">Amount (₹)</th>
+                </tr>
+            </thead>
+            <tbody id="pProductRows">
+                <!-- Rows injected via JS -->
+            </tbody>
+        </table>
+
+        <!-- Totals & Notes -->
+        <div class="totals-section">
+            <table class="totals-table">
+                <tr>
+                    <td>Subtotal (Taxable)</td>
+                    <td id="pSubtotal" style="text-align: right; font-weight: 700;"></td>
+                </tr>
+                <tbody id="pTaxSplitRows">
+                    <!-- Tax rows injected by script -->
+                </tbody>
+                <tr class="grand-total-row">
+                    <td>Grand Total (Net Amount)</td>
+                    <td id="pTotal" style="text-align: right;"></td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="bill-footer">
+            <div class="terms-box">
+                <p><strong>Terms & Conditions:</strong></p>
+                <div id="pTerms" style="margin-bottom: 10px; font-weight: 500;"></div>
+                <p>1. Certified that the particulars given above are true and correct.<br>
+                   2. Goods once sold will NOT be taken back or exchanged.<br>
+                   3. Our responsibility ceases as soon as goods leave our premises.<br>
+                   4. Subject to PERAMBALUR Jurisdiction.</p>
+            </div>
+            <div class="sign-box">
+                <p style="font-size: 12px; margin-bottom: 40px; font-weight: 700;">For <strong>RMK Fly Ash Bricks</strong></p>
+                <div class="sign-line">Authorized Signatory</div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="admin-footer" style="padding: 20px; opacity: 0.5; font-size: 10px; text-align: center; width: 210mm; color: #000;">
+        Professional Billing System | Developed by Guna Arts It Solutions
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const invoiceData = JSON.parse(sessionStorage.getItem('view_invoice_data'));
+
+            if (!invoiceData) {
+                console.error('No invoice data found in sessionStorage.');
+                return;
+            }
+
+            // Populate Header Details
+            document.getElementById('pInvNumber').textContent = invoiceData.invNumber || 'N/A';
+            document.getElementById('pInvDate').textContent = invoiceData.invDate || 'N/A';
+            
+            // Customer Info
+            document.getElementById('pCustomerName').textContent = invoiceData.customerName || 'N/A';
+            document.getElementById('pCustomerAddress').textContent = invoiceData.customerAddress || 'N/A';
+            
+            const pCustomerGstContainer = document.getElementById('pCustomerGstContainer');
+            const pCustomerGst = document.getElementById('pCustomerGst');
+            if (invoiceData.customerGst && invoiceData.customerGst !== 'N/A' && invoiceData.customerGst.trim() !== '') {
+                pCustomerGst.textContent = invoiceData.customerGst;
+                pCustomerGstContainer.style.display = 'block';
+            }
+
+            const pCustomerPhoneContainer = document.getElementById('pCustomerPhoneContainer');
+            const pCustomerPhone = document.getElementById('pCustomerPhone');
+            if (invoiceData.customerPhone && invoiceData.customerPhone !== 'N/A' && invoiceData.customerPhone.trim() !== '') {
+                pCustomerPhone.textContent = invoiceData.customerPhone;
+                pCustomerPhoneContainer.style.display = 'block';
+            }
+
+            // Products Table
+            const productBody = document.getElementById('pProductRows');
+            productBody.innerHTML = '';
+            
+            if (invoiceData.products && Array.isArray(invoiceData.products)) {
+                invoiceData.products.forEach((p, index) => {
+                    const tr = document.createElement('tr');
+                    const qty = parseFloat(p.qty) || 0;
+                    const rate = parseFloat(p.rate) || 0;
+                    const amount = parseFloat(p.amount) || (qty * rate);
+                    
+                    let qtyWithUnit = qty;
+                    const descLower = (p.description || '').toLowerCase();
+                    if (descLower.includes('paver')) {
+                        qtyWithUnit += ' Sq. Ft';
+                    } else if (descLower.includes('cement')) {
+                        qtyWithUnit += ' Bags';
+                    } else if (descLower.includes('fly ash') || descLower === 'ash') {
+                        if (!descLower.includes('bricks')) {
+                            qtyWithUnit += ' Tons';
+                        }
+                    }
+
+                    tr.innerHTML = `
+                        <td style="text-align: center;">${index + 1}</td>
+                        <td style="font-weight: 600;">${p.description}</td>
+                        <td style="text-align: center;">${qtyWithUnit}</td>
+                        <td style="text-align: right;">₹${rate.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                        <td style="text-align: right; font-weight: 700;">₹${amount.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                    `;
+                    productBody.appendChild(tr);
+                });
+            }
+
+            // Totals
+            const subtotal = parseFloat(invoiceData.subtotal) || 0;
+            const total = parseFloat(invoiceData.total) || 0;
+            
+            document.getElementById('pSubtotal').textContent = '₹' + subtotal.toLocaleString('en-IN', {minimumFractionDigits: 2});
+            document.getElementById('pTotal').textContent = '₹' + total.toLocaleString('en-IN', {minimumFractionDigits: 2});
+            
+            const pTerms = document.getElementById('pTerms');
+            if (pTerms) pTerms.innerHTML = (invoiceData.notes || '').replace(/\n/g, '<br>');
+
+            // Tax Split Logic
+            const taxContainer = document.getElementById('pTaxSplitRows');
+            taxContainer.innerHTML = '';
+            
+            if (invoiceData.taxType === 'intra') {
+                const cgst = parseFloat(invoiceData.cgst) || 0;
+                const sgst = parseFloat(invoiceData.sgst) || 0;
+                taxContainer.innerHTML = `
+                    <tr>
+                        <td>CGST (9%)</td>
+                        <td style="text-align: right;">₹${cgst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                    </tr>
+                    <tr>
+                        <td>SGST (9%)</td>
+                        <td style="text-align: right;">₹${sgst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                    </tr>
+                `;
+            } else if (invoiceData.taxType === 'inter') {
+                const igst = parseFloat(invoiceData.igst) || 0;
+                taxContainer.innerHTML = `
+                    <tr>
+                        <td>IGST (18%)</td>
+                        <td style="text-align: right;">₹${igst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                    </tr>
+                `;
+            }
+
+            // PDF Download logic
+            document.getElementById('downloadPdfBtn').addEventListener('click', function() {
+                const element = document.getElementById('printableInvoice');
+                const opt = {
+                    margin:       [10, 5, 10, 5],
+                    filename:     `RMK_Bill_${invoiceData.invNumber || 'N/A'}.pdf`,
+                    image:        { type: 'jpeg', quality: 1.0 },
+                    html2canvas:  { scale: 3, useCORS: true, letterRendering: true },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+                html2pdf().set(opt).from(element).save();
+            });
+        });
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</body>
+
+</html>
