@@ -228,12 +228,17 @@
     <div class="invoice-container" id="printableInvoice">
         <!-- Professional Header -->
         <div class="bill-header">
-            <div class="company-info">
-                <h1 style="display: inline-block; text-align: center; margin: 0;">R.M.K<br><span style="font-size: 0.85em;">FLYASH BRICKS & PAVER BLOCK</span></h1>
-                <p>SFNO:281/5A, ARIYALUR MAIN ROAD, KAULPALAYAM, THURAIMANGALAM - POST, PERAMBALUR - 621 220</p>
-                <p style="font-size: 24px; font-weight: 900; margin-top: 10px; margin-bottom: 10px; color: #000;">GSTIN-33CFVPK8449D1ZO</p>
-                <p><strong>Phone:</strong> +91 99520 68848 | 82488 38593</p>
-                <p><strong>Email:</strong> rmkgroups1987@gmail.com</p>
+            <div class="company-info" style="display: flex; gap: 20px; align-items: flex-start;">
+                <div>
+                    <img src="assets/img/logo.png" id="printLogo" style="max-height: 110px; width: auto;" alt="Logo">
+                </div>
+                <div>
+                    <h1 style="margin: 0; text-align: left;">R.M.K<br><span style="font-size: 0.85em;">FLYASH BRICKS & PAVER BLOCK</span></h1>
+                    <p>SFNO:281/5A, ARIYALUR MAIN ROAD, KAULPALAYAM, THURAIMANGALAM - POST, PERAMBALUR - 621 220</p>
+                    <p style="font-size: 20px; font-weight: 900; margin-top: 5px; margin-bottom: 5px; color: #000;">GSTIN-33CFVPK8449D1ZO</p>
+                    <p><strong>Phone:</strong> +91 99520 68848 | 82488 38593</p>
+                    <p><strong>Email:</strong> rmkgroups1987@gmail.com</p>
+                </div>
             </div>
             <div class="bill-meta">
                 <h2 id="pDocTitle">TAX INVOICE</h2>
@@ -319,6 +324,12 @@
             document.getElementById('pInvNumber').textContent = invoiceData.invNumber || 'N/A';
             document.getElementById('pInvDate').textContent = invoiceData.invDate || 'N/A';
             
+            // Custom Logo support
+            const savedLogo = localStorage.getItem('savedPrintLogo');
+            if (savedLogo) {
+                document.getElementById('printLogo').src = savedLogo;
+            }
+            
             // Customer Info
             document.getElementById('pCustomerName').textContent = invoiceData.customerName || 'N/A';
             document.getElementById('pCustomerAddress').textContent = invoiceData.customerAddress || 'N/A';
@@ -388,21 +399,28 @@
             if (invoiceData.taxType === 'intra') {
                 const cgst = parseFloat(invoiceData.cgst) || 0;
                 const sgst = parseFloat(invoiceData.sgst) || 0;
+                const gstTotal = parseFloat(invoiceData.gstTotal) || parseFloat(invoiceData.gstAmount) || (cgst + sgst) || 0;
+                const totalGstRate = (subtotal > 0 && gstTotal > 0) ? Math.round((gstTotal / subtotal) * 100) : 0;
+                const halfRate = totalGstRate > 0 ? (totalGstRate / 2) : 0;
+
                 taxContainer.innerHTML = `
                     <tr>
-                        <td>CGST (9%)</td>
+                        <td>CGST (${halfRate}%)</td>
                         <td style="text-align: right;">₹${cgst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                     </tr>
                     <tr>
-                        <td>SGST (9%)</td>
+                        <td>SGST (${halfRate}%)</td>
                         <td style="text-align: right;">₹${sgst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                     </tr>
                 `;
             } else if (invoiceData.taxType === 'inter') {
                 const igst = parseFloat(invoiceData.igst) || 0;
+                const gstTotal = parseFloat(invoiceData.gstTotal) || parseFloat(invoiceData.gstAmount) || igst || 0;
+                const totalGstRate = (subtotal > 0 && gstTotal > 0) ? Math.round((gstTotal / subtotal) * 100) : 0;
+
                 taxContainer.innerHTML = `
                     <tr>
-                        <td>IGST (18%)</td>
+                        <td>IGST (${totalGstRate}%)</td>
                         <td style="text-align: right;">₹${igst.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                     </tr>
                 `;

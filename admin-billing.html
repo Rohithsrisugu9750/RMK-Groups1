@@ -113,15 +113,15 @@
                 <button class="btn btn-outline" id="btnResetInvCounter" title="Reset Bill Number" style="color:#dc2626;border-color:#fca5a5;padding:0.5rem 0.8rem;">
                     <i class="fas fa-undo"></i>
                 </button>
-                <a href="admin_create_invoice.html" class="btn btn-secondary" id="createInvoiceBtn">
+                <a href="admin-create-invoice.html" class="btn btn-secondary" id="createInvoiceBtn">
                     <i class="fas fa-file-invoice"></i>
                     Create Invoice
                 </a>
-                <a href="admin_create_quote.html" class="btn btn-primary" id="getQuoteBtn">
+                <a href="admin-create-quote.html" class="btn btn-primary" id="getQuoteBtn">
                     <i class="fas fa-file-alt"></i>
                     Get Quote
                 </a>
-                <a href="admin_record_payment.html" class="btn" id="headerRecordPaymentBtn" style="background:#f39c12;color:white;border:none;display:flex;align-items:center;gap:8px;">
+                <a href="admin-record-payment.html" class="btn" id="headerRecordPaymentBtn" style="background:#f39c12;color:white;border:none;display:flex;align-items:center;gap:8px;">
                     <i class="fas fa-hand-holding-usd"></i>
                     Record Payment
                 </a>
@@ -233,6 +233,8 @@
                             <th>Customer</th>
                             <th>Date</th>
                             <th>Amount</th>
+                            <th>GST %</th>
+                            <th>GST Amt</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
@@ -240,7 +242,7 @@
                     <tbody>
                         <!-- Data cleared -->
                         <tr>
-                            <td colspan="6" style="text-align: center; padding: 2rem;">
+                            <td colspan="8" style="text-align: center; padding: 2rem;">
                                 No invoices found.
                             </td>
                         </tr>

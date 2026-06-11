@@ -7,10 +7,10 @@ header('Access-Control-Allow-Headers: Content-Type');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
-$host = 'localhost';
-$db   = 'masterbe_rmk_db';
-$user = 'masterbe_rmk_user';
-$pass = 'HP2YEUY5Es[(SJX#';
+$host = '127.0.0.1';
+$db   = 'u496146737_rmk_groups_db';
+$user = 'u496146737_u123_user';
+$pass = 'Rohith@9750';
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$db;charset=utf8mb4", $user, $pass);

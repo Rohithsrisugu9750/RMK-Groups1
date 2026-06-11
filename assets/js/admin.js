@@ -14,6 +14,30 @@ document.addEventListener('DOMContentLoaded', async function () {
     const preloader = document.querySelector('.preloader');
     if (preloader) preloader.style.display = 'none';
 
+    // 3. Migrate old invoice and quote numbers (e.g. 2026-2027 -> 26-27)
+    try {
+        const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
+        let migratedInv = false;
+        invoices.forEach(inv => {
+            if (inv.invNumber && inv.invNumber.match(/INV-\d{2}-\d{2}-(.*)/)) {
+                inv.invNumber = inv.invNumber.replace(/INV-(\d{2})-(\d{2})-(.*)/, 'INV-20$1-20$2-$3');
+                migratedInv = true;
+            }
+        });
+        if (migratedInv) localStorage.setItem('rmk_invoices', JSON.stringify(invoices));
+
+        const quotes = safeJsonParse(localStorage.getItem('rmk_quotes'), []);
+        let migratedQt = false;
+        quotes.forEach(qt => {
+            if (qt.quoteNumber && qt.quoteNumber.match(/QT-\d{2}-\d{2}-(.*)/)) {
+                qt.quoteNumber = qt.quoteNumber.replace(/QT-(\d{2})-(\d{2})-(.*)/, 'QT-20$1-20$2-$3');
+                migratedQt = true;
+            }
+        });
+        if (migratedQt) localStorage.setItem('rmk_quotes', JSON.stringify(quotes));
+    } catch (e) {
+        console.warn('Migration error', e);
+    }
 
     /**
      * CLOUD SYNCHRONIZATION SYSTEM (PHP-Direct Mode)
@@ -33,7 +57,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         try {
             let cloudData = null;
-            const endpoints = ['https://rmkgroups.in/sync.php', '/sync.php', 'sync.php'];
+            const endpoints = ['/rmk-cloud-sync', '/api/data', '/sync.php'];
             let lastError = null;
 
             for (let url of endpoints) {
@@ -67,7 +91,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
             if (!cloudData) throw new Error(`Cloud sync failed. Last error: ${lastError ? lastError.message : 'No valid data'}`);
 
-            window._isCloudSyncing = true; // prevent loopback saves during merge
+            window._isApplyingCloudData = true; // prevent loopback saves during merge
             for (let key in cloudData) {
                 if (key === 'rmk_session') continue;
 
@@ -84,7 +108,16 @@ document.addEventListener('DOMContentLoaded', async function () {
                             if (Array.isArray(current)) {
                                 current.forEach(item => { if (item && item.id) dataMap.set(String(item.id), item); });
                             }
-                            incoming.forEach(item => { if (item && item.id) dataMap.set(String(item.id), item); });
+                            incoming.forEach(item => { 
+                                if (item && item.id) {
+                                    const existing = dataMap.get(String(item.id));
+                                    const inTime = new Date(item.timestamp || 0).getTime();
+                                    const exTime = new Date(existing?.timestamp || 0).getTime();
+                                    if (!existing || inTime >= exTime) {
+                                        dataMap.set(String(item.id), item);
+                                    }
+                                } 
+                            });
                             const merged = Array.from(dataMap.values()).sort((a, b) => b.id - a.id);
                             localStorage.setItem(key, JSON.stringify(merged));
                         } else {
@@ -98,6 +131,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                     localStorage.setItem(key, typeof cloudValue === 'string' ? cloudValue : JSON.stringify(cloudValue));
                 }
             }
+            window._isApplyingCloudData = false;
 
             if (dbBadge) {
                 dbBadge.textContent = 'DB: Online ✓';
@@ -126,15 +160,25 @@ document.addEventListener('DOMContentLoaded', async function () {
         const originalSetItem = localStorage.setItem.bind(localStorage);
         localStorage.setItem = function (key, value) {
             originalSetItem(key, value);
-            if (window._isCloudSyncing || !key.startsWith('rmk_') || key === 'rmk_session') return;
+            if (window._isApplyingCloudData || !key.startsWith('rmk_') || key === 'rmk_session') return;
             
             const writeEndpoints = ['/sync.php', 'sync.php', 'https://rmkgroups.in/sync.php', '/rmk-sync-write', 'http://localhost:3000/rmk-sync-write'];
             writeEndpoints.forEach(url => {
-                fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key, value })
-                }).catch(() => { });
+                try {
+                    fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key, value }),
+                        keepalive: true
+                    }).catch(() => { });
+                } catch (e) {
+                    // Fallback without keepalive if size exceeds 64KB limit
+                    fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key, value })
+                    }).catch(() => { });
+                }
             });
         };
         window.syncWithCloud = syncWithCloud;
@@ -446,14 +490,15 @@ function generateFinancialYearInvoiceNumber(type = 'invoice', manualValue = null
     const savedFy = localStorage.getItem(fyKey);
     let counter = parseInt(localStorage.getItem(storageKey) || '0');
 
-    // Scan existing records to find the absolute max counter
+    // Scan existing records to find the absolute max counter (including deleted ones so counter never shrinks)
     const listKey = type === 'invoice' ? 'rmk_invoices' : 'rmk_quotes';
-    const records = safeJsonParse(localStorage.getItem(listKey), []);
+    const allRecords = safeJsonParse(localStorage.getItem(listKey), []);
+    const records = allRecords; 
     let maxCounter = 0;
     
     records.forEach(rec => {
         const numStr = type === 'invoice' ? rec.invNumber : rec.quoteNumber;
-        if (numStr) {
+        if (numStr && numStr.includes(fyCode)) { // Only count for current FY
             const parts = numStr.split('-');
             if (parts.length > 0) {
                 const num = parseInt(parts[parts.length - 1]);
@@ -464,9 +509,7 @@ function generateFinancialYearInvoiceNumber(type = 'invoice', manualValue = null
         }
     });
 
-    if (maxCounter > counter) {
-        counter = maxCounter;
-    }
+    counter = maxCounter; // Reset counter so it continues from highest active
 
     // Update counter in storage if we found a higher one
     if (maxCounter > 0) {
@@ -561,6 +604,31 @@ function initializeBillingModule() {
         createInvoiceBtn.addEventListener('click', function (e) {
             e.preventDefault();
             console.log('Create Invoice Button Clicked');
+
+            const formEl = document.getElementById('invoiceForm');
+            if (formEl) {
+                delete formEl.dataset.editId;
+                formEl.reset();
+                const productItemsContainer = document.getElementById('invProductItems');
+                if (productItemsContainer) {
+                    productItemsContainer.innerHTML = '';
+                    if (typeof addInvoiceProductRow === 'function') addInvoiceProductRow();
+                }
+                const today = new Date();
+                const invDate = document.getElementById('invDate');
+                if (invDate) invDate.value = today.toISOString().split('T')[0];
+                const gstToggle = document.getElementById('invGstToggle');
+                if (gstToggle) gstToggle.checked = false;
+                const gstRate = document.getElementById('invGstRate');
+                if (gstRate) gstRate.disabled = true;
+                if (typeof calculateInvoiceTotals === 'function') calculateInvoiceTotals();
+                
+                // Clear custom client inputs explicitly
+                document.querySelectorAll('.custom-client-details input').forEach(el => {
+                    el.value = '';
+                    el.disabled = false;
+                });
+            }
 
             // Generate NEW preview number only if it's currently empty or just placeholder
             const invNumEl = document.getElementById('invNumber');
@@ -779,7 +847,14 @@ function initializeInvoiceModalLogic() {
             return;
         }
 
+        // Fix: Save invoice data before printing when form is submitted
+        saveInvoiceToStorage();
         printInvoice();
+        
+        // Refresh table if we are on billing page
+        if (typeof loadInvoicesToTable === 'function') {
+            loadInvoicesToTable();
+        }
     });
 }
 
@@ -1540,6 +1615,8 @@ function initializePaymentModal() {
                 invoices[invIndex].status = 'Partial';
             }
 
+            invoices[invIndex].timestamp = new Date().toISOString();
+
             let wasSyncing = window._isCloudSyncing;
             window._isCloudSyncing = false;
             localStorage.setItem('rmk_invoices', JSON.stringify(invoices));
@@ -1581,9 +1658,13 @@ function refreshCurrentPageView() {
 
 function saveInvoiceToStorage() {
     const invNumber = document.getElementById('invNumber').value;
+    const formEl = document.getElementById('invoiceForm');
+    const editId = formEl ? formEl.dataset.editId : null;
 
-    // COMMIT the invoice number officially to the counter now that we are actually saving/printing
-    generateFinancialYearInvoiceNumber('invoice', invNumber, true);
+    if (!editId) {
+        // COMMIT the invoice number officially to the counter now that we are actually saving/printing
+        generateFinancialYearInvoiceNumber('invoice', invNumber, true);
+    }
 
     const invDate = document.getElementById('invDate').value;
     const customerSelect = document.getElementById('invCustomerName');
@@ -1723,13 +1804,131 @@ function saveInvoiceToStorage() {
     };
 
     const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
-    invoices.unshift(invoiceData);
+    
+    if (editId) {
+        const index = invoices.findIndex(inv => String(inv.id) === String(editId));
+        if (index !== -1) {
+            invoiceData.id = invoices[index].id;
+            invoiceData.timestamp = new Date().toISOString();
+            invoices[index] = invoiceData;
+        } else {
+            invoices.unshift(invoiceData);
+        }
+        if (formEl) delete formEl.dataset.editId;
+    } else {
+        invoices.unshift(invoiceData);
+    }
+    
     localStorage.setItem('rmk_invoices', JSON.stringify(invoices));
 
     if (window.realtimeManager) {
         window.realtimeManager.emitNewInvoice(invoiceData);
     }
 }
+
+window.openEditInvoiceModal = function(invoice) {
+    const modal = document.getElementById('invoiceModal');
+    if (!modal) return;
+    
+    const formEl = document.getElementById('invoiceForm');
+    if (formEl) formEl.dataset.editId = invoice.id;
+    
+    if (document.getElementById('invNumber')) document.getElementById('invNumber').value = invoice.invNumber || '';
+    if (document.getElementById('invDate')) document.getElementById('invDate').value = invoice.invDate || '';
+    if (document.getElementById('invDueDate')) document.getElementById('invDueDate').value = invoice.invDueDate || '';
+    
+    const custSelect = document.getElementById('invCustomerName');
+    let matchedOption = false;
+    if (custSelect) {
+        for(let i=0; i<custSelect.options.length; i++) {
+            if(custSelect.options[i].text === invoice.customerName || custSelect.options[i].value === invoice.customerName) {
+                custSelect.selectedIndex = i;
+                matchedOption = true;
+                break;
+            }
+        }
+    }
+    
+    const customClientName = document.getElementById('invCustomClientName');
+    if (!matchedOption && customClientName) {
+        if (custSelect) custSelect.value = '';
+        customClientName.value = invoice.customerName;
+        document.querySelectorAll('.custom-client-details input').forEach(el => el.disabled = false);
+        if (document.getElementById('invCustomClientGst')) document.getElementById('invCustomClientGst').value = invoice.customerGst !== 'N/A' ? invoice.customerGst : '';
+        if (document.getElementById('invCustomClientMobile')) document.getElementById('invCustomClientMobile').value = invoice.customerPhone !== 'N/A' ? invoice.customerPhone : '';
+        if (document.getElementById('invCustomClientAddress')) document.getElementById('invCustomClientAddress').value = invoice.customerAddress !== 'N/A' ? invoice.customerAddress : '';
+    } else if (customClientName) {
+        customClientName.value = '';
+        document.querySelectorAll('.custom-client-details input').forEach(el => {
+            el.value = '';
+            el.disabled = true;
+        });
+    }
+    
+    if (document.getElementById('invTaxType')) document.getElementById('invTaxType').value = invoice.taxType || 'intra';
+    
+    const productItemsContainer = document.getElementById('invProductItems');
+    if (productItemsContainer) {
+        productItemsContainer.innerHTML = '';
+        if (invoice.products && invoice.products.length > 0) {
+            invoice.products.forEach(prod => {
+                if (typeof addInvoiceProductRow === 'function') addInvoiceProductRow();
+                const lastRow = productItemsContainer.lastElementChild;
+                if (lastRow) {
+                    const sel = lastRow.querySelector('.product-select');
+                    if (sel) {
+                        let matchedProd = false;
+                        for(let i=0; i<sel.options.length; i++){
+                            if(sel.options[i].value === prod.description || sel.options[i].text === prod.description) {
+                                sel.selectedIndex = i;
+                                matchedProd = true;
+                                break;
+                            }
+                        }
+                        if(!matchedProd) {
+                            const opt = document.createElement('option');
+                            opt.value = prod.description;
+                            opt.text = prod.description;
+                            sel.add(opt);
+                            sel.value = prod.description;
+                        }
+                    }
+                    const qtyInput = lastRow.querySelector('.quantity-input');
+                    const priceInput = lastRow.querySelector('.price-input');
+                    const amtDisplay = lastRow.querySelector('.amount-display');
+                    if (qtyInput) qtyInput.value = prod.qty;
+                    if (priceInput) priceInput.value = prod.rate;
+                    if (amtDisplay) amtDisplay.value = prod.amount;
+                }
+            });
+        } else {
+            if (typeof addInvoiceProductRow === 'function') addInvoiceProductRow();
+        }
+    }
+    
+    const gstToggle = document.getElementById('invGstToggle');
+    const gstRate = document.getElementById('invGstRate');
+    const invGstTotal = parseFloat(invoice.gstTotal) || parseFloat(invoice.gstAmount) || 0;
+    if (invGstTotal > 0 && invoice.subtotal > 0) {
+        const rate = Math.round((invGstTotal / invoice.subtotal) * 100);
+        if (gstToggle) gstToggle.checked = true;
+        if (gstRate) {
+            gstRate.disabled = false;
+            gstRate.value = rate.toString();
+        }
+    } else {
+        if (gstToggle) gstToggle.checked = false;
+        if (gstRate) gstRate.disabled = true;
+    }
+    
+    if (document.getElementById('invNotes')) document.getElementById('invNotes').value = invoice.notes || '';
+    if (document.getElementById('invReceivedAmount')) document.getElementById('invReceivedAmount').value = invoice.receivedAmount || 0;
+    
+    if (typeof calculateInvoiceTotals === 'function') calculateInvoiceTotals();
+    
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+};
 
 function shareInvoiceOnWhatsApp() {
     // 1. Collect Data
@@ -2393,7 +2592,174 @@ window.deleteWorker = function(id) {
 // --- Attendance Module Logic ---
 function initializeAttendanceModule() {
     console.log('Attendance Module Initialized');
-    // Implement simple attendance table loader if necessary
+    
+    let currentWeekStart = getMonday(new Date());
+    let attendanceData = safeJsonParse(localStorage.getItem('rmk_attendance'), {});
+
+    function getMonday(d) {
+        d = new Date(d);
+        var day = d.getDay(),
+            diff = d.getDate() - day + (day == 0 ? -6 : 1); // adjust when day is sunday
+        return new Date(d.setDate(diff));
+    }
+
+    function formatDate(date) {
+        const d = new Date(date);
+        let month = '' + (d.getMonth() + 1);
+        let day = '' + d.getDate();
+        const year = d.getFullYear();
+
+        if (month.length < 2) month = '0' + month;
+        if (day.length < 2) day = '0' + day;
+
+        return [year, month, day].join('-');
+    }
+
+    function getDisplayDate(date) {
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function renderTable() {
+        const workers = safeJsonParse(localStorage.getItem('rmk_workers'), []);
+        const tableHeader = document.getElementById('attendanceTableHeader');
+        const tableBody = document.getElementById('attendanceTableBody');
+        const weekRangeText = document.getElementById('currentWeekRange');
+
+        if (!tableHeader || !tableBody) return;
+
+        // Setup Dates for the week
+        const weekDates = [];
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(currentWeekStart);
+            d.setDate(d.getDate() + i);
+            weekDates.push(d);
+        }
+
+        // Update Week Range Header
+        if (weekRangeText) {
+            weekRangeText.textContent = `${getDisplayDate(weekDates[0])} - ${getDisplayDate(weekDates[6])}`;
+        }
+
+        // Render Table Header
+        const days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+        let headerHtml = `<th>Worker</th>`;
+        weekDates.forEach((d, index) => {
+            headerHtml += `<th>${days[index]}<span class="date-header">${d.getDate()}</span></th>`;
+        });
+        headerHtml += `<th>Total Days</th>`;
+        tableHeader.innerHTML = headerHtml;
+
+        if (workers.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 2rem;">No workers found. Please add workers first.</td></tr>`;
+            updateSummaries(0, 0, 0);
+            return;
+        }
+
+        let totalP = 0, totalH = 0, totalA = 0;
+        tableBody.innerHTML = '';
+
+        workers.forEach(w => {
+            const tr = document.createElement('tr');
+            tr.dataset.workerId = w.id;
+            
+            const workerName = w.workerName || w.name || 'Worker';
+
+            let html = `<td>
+                <div style="font-weight:600;">${workerName}</div>
+                <div style="font-size:0.75rem; color:#6b7280;">${w.category || 'Worker'}</div>
+            </td>`;
+
+            let workerPayableDays = 0;
+
+            weekDates.forEach(d => {
+                const dateStr = formatDate(d);
+                const status = (attendanceData[w.id] && attendanceData[w.id][dateStr]) ? attendanceData[w.id][dateStr] : '';
+                
+                let badgeClass = 'status-empty';
+                let displayStatus = '-';
+                
+                if (status === 'P') { badgeClass = 'status-present'; displayStatus = 'P'; totalP++; workerPayableDays += 1; }
+                else if (status === 'H') { badgeClass = 'status-half'; displayStatus = 'H'; totalH++; workerPayableDays += 0.5; }
+                else if (status === 'A') { badgeClass = 'status-absent'; displayStatus = 'A'; totalA++; }
+
+                html += `<td class="attendance-cell" data-date="${dateStr}" data-worker="${w.id}">
+                    <span class="status-badge ${badgeClass}">${displayStatus}</span>
+                </td>`;
+            });
+
+            html += `<td style="font-weight:bold;">${workerPayableDays}</td>`;
+            tr.innerHTML = html;
+            tableBody.appendChild(tr);
+        });
+
+        // Add Click Listeners to Cells
+        const cells = document.querySelectorAll('.attendance-cell');
+        cells.forEach(cell => {
+            cell.addEventListener('click', function() {
+                const workerId = this.dataset.worker;
+                const dateStr = this.dataset.date;
+                
+                if (!attendanceData[workerId]) attendanceData[workerId] = {};
+                const currentStatus = attendanceData[workerId][dateStr] || '';
+                
+                let nextStatus = '';
+                if (currentStatus === '') nextStatus = 'P';
+                else if (currentStatus === 'P') nextStatus = 'H';
+                else if (currentStatus === 'H') nextStatus = 'A';
+                else if (currentStatus === 'A') nextStatus = '';
+
+                if (nextStatus === '') {
+                    delete attendanceData[workerId][dateStr];
+                } else {
+                    attendanceData[workerId][dateStr] = nextStatus;
+                }
+                
+                // Auto-save on click (better UX than a save button, but we still keep the save button for peace of mind)
+                localStorage.setItem('rmk_attendance', JSON.stringify(attendanceData));
+                
+                // Re-render
+                renderTable();
+            });
+        });
+
+        updateSummaries(totalP, totalH, totalA);
+    }
+
+    function updateSummaries(p, h, a) {
+        const tp = document.getElementById('totalPresentCount');
+        const th = document.getElementById('totalHalfCount');
+        const ta = document.getElementById('totalAbsentCount');
+        if (tp) tp.textContent = p;
+        if (th) th.textContent = h;
+        if (ta) ta.textContent = a;
+    }
+
+    const prevWeekBtn = document.getElementById('prevWeekBtn');
+    const nextWeekBtn = document.getElementById('nextWeekBtn');
+    const saveBtn = document.getElementById('saveAttendanceBtn');
+
+    if (prevWeekBtn) {
+        prevWeekBtn.addEventListener('click', () => {
+            currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+            renderTable();
+        });
+    }
+
+    if (nextWeekBtn) {
+        nextWeekBtn.addEventListener('click', () => {
+            currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+            renderTable();
+        });
+    }
+
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            localStorage.setItem('rmk_attendance', JSON.stringify(attendanceData));
+            showToast('Attendance saved successfully!', 'success');
+        });
+    }
+
+    renderTable();
 }
 
 // --- Customers Module Logic ---
@@ -2495,6 +2861,62 @@ function initializeCustomersModule() {
                 const phone = formData.get('phone');
                 const city = formData.get('city') || 'N/A';
 
+                let customers = safeJsonParse(localStorage.getItem('rmk_customers'), []);
+
+                if (customerForm.dataset.editId) {
+                    const editIndex = customers.findIndex(c => c.id === customerForm.dataset.editId);
+                    if (editIndex !== -1) {
+                        const oldCompanyName = customers[editIndex].company;
+                        customers[editIndex] = {
+                            ...customers[editIndex],
+                            company,
+                            contact,
+                            phone,
+                            city,
+                            email: formData.get('email') || '',
+                            address: formData.get('address') || '',
+                            state: formData.get('state'),
+                            gst: formData.get('gst') || 'N/A'
+                        };
+                        localStorage.setItem('rmk_customers', JSON.stringify(customers));
+                        
+                        // Cascade update to Invoices and Quotes
+                        if (oldCompanyName && oldCompanyName !== company) {
+                            let invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
+                            let quotes = safeJsonParse(localStorage.getItem('rmk_quotes'), []);
+                            let updatedInvoices = false;
+                            let updatedQuotes = false;
+                            
+                            invoices.forEach(inv => {
+                                if (inv.customerName === oldCompanyName) {
+                                    inv.customerName = company;
+                                    updatedInvoices = true;
+                                }
+                            });
+                            
+                            quotes.forEach(qt => {
+                                if (qt.customerName === oldCompanyName) {
+                                    qt.customerName = company;
+                                    updatedQuotes = true;
+                                }
+                            });
+                            
+                            if (updatedInvoices) localStorage.setItem('rmk_invoices', JSON.stringify(invoices));
+                            if (updatedQuotes) localStorage.setItem('rmk_quotes', JSON.stringify(quotes));
+                        }
+                        
+                        const tableBody = document.querySelector('.data-table tbody');
+                        if (tableBody) {
+                            tableBody.innerHTML = '';
+                            customers.forEach(c => addCustomerRowToTable(c));
+                        }
+                        
+                        showToast('Customer updated successfully!', 'success');
+                        closeModal();
+                        return;
+                    }
+                }
+
                 const custId = 'ID: ' + Math.floor(4000 + Math.random() * 1000);
                 const avatar = company.substring(0, 2).toUpperCase();
                 const avatarColor = getRandomColor();
@@ -2517,7 +2939,6 @@ function initializeCustomersModule() {
                 };
 
                 // Save to Storage
-                const customers = safeJsonParse(localStorage.getItem('rmk_customers'), []);
                 customers.unshift(newCustomer);
                 localStorage.setItem('rmk_customers', JSON.stringify(customers));
 
@@ -2532,6 +2953,74 @@ function initializeCustomersModule() {
                 closeModal();
             });
         }
+    }
+
+    // Add Event Delegation for Edit and Delete Customers
+    const customerTableBody = document.querySelector('.data-table tbody');
+    if (customerTableBody) {
+        customerTableBody.addEventListener('click', function(e) {
+            const btn = e.target.closest('.action-btn');
+            if (!btn) return;
+
+            const row = btn.closest('tr');
+            if (!row) return;
+
+            const customerId = row.dataset.id;
+            let customers = safeJsonParse(localStorage.getItem('rmk_customers'), []);
+            const customerIndex = customers.findIndex(c => c.id === customerId);
+
+            if (customerIndex === -1) return;
+
+            if (btn.classList.contains('delete')) {
+                if (confirm('Are you sure you want to delete this customer?')) {
+                    customers.splice(customerIndex, 1);
+                    localStorage.setItem('rmk_customers', JSON.stringify(customers));
+                    row.remove();
+                    updateCustomerStats(customers.length);
+                    showToast('Customer deleted successfully', 'success');
+                }
+            } else if (btn.classList.contains('edit')) {
+                const customer = customers[customerIndex];
+                const form = document.getElementById('addCustomerForm');
+                const modal = document.getElementById('addCustomerModal');
+                
+                if (form && modal) {
+                    form.dataset.editId = customer.id;
+                    form.querySelector('[name="companyName"]').value = customer.company || '';
+                    form.querySelector('[name="contactPerson"]').value = customer.contact || '';
+                    form.querySelector('[name="phone"]').value = customer.phone || '';
+                    form.querySelector('[name="email"]').value = customer.email || '';
+                    form.querySelector('[name="address"]').value = customer.address || '';
+                    form.querySelector('[name="city"]').value = customer.city || '';
+                    form.querySelector('[name="state"]').value = customer.state || 'Tamil Nadu';
+                    form.querySelector('[name="gst"]').value = customer.gst === 'N/A' ? '' : (customer.gst || '');
+                    
+                    const title = modal.querySelector('.modal-title');
+                    if (title) title.innerHTML = '<i class="fas fa-edit"></i> Edit Customer';
+                    
+                    const submitBtn = form.querySelector('button[type="submit"]');
+                    if (submitBtn) submitBtn.textContent = 'Save Changes';
+                    
+                    modal.classList.add('active');
+                }
+            }
+        });
+    }
+
+    // Reset Modal Title and Button text on close
+    const addCustomerBtnElement = document.getElementById('addCustomerBtn');
+    if (addCustomerBtnElement) {
+        addCustomerBtnElement.addEventListener('click', () => {
+            const form = document.getElementById('addCustomerForm');
+            const modal = document.getElementById('addCustomerModal');
+            if (form) delete form.dataset.editId;
+            if (modal) {
+                const title = modal.querySelector('.modal-title');
+                if (title) title.innerHTML = '<i class="fas fa-user-plus"></i> Add New Customer';
+                const submitBtn = form.querySelector('button[type="submit"]');
+                if (submitBtn) submitBtn.textContent = 'Add Customer';
+            }
+        });
     }
 }
 
@@ -2938,6 +3427,20 @@ function updateInventoryStats(qty, action) {
     }
 }
 
+// Robust Date Parser for Invoices
+function parseSafeDate(dateStr) {
+    if (!dateStr) return new Date(NaN);
+    if (dateStr.includes('/')) {
+        const parts = dateStr.split('/');
+        if (parts.length === 3) return new Date(parts[2], parts[1] - 1, parts[0]);
+    } else if (dateStr.includes('-')) {
+        const parts = dateStr.split('-');
+        if (parts[0].length === 2) return new Date(parts[2], parts[1] - 1, parts[0]);
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+    return new Date(dateStr);
+}
+
 // --- Reports Module Logic ---
 function initializeReportsModule() {
     console.log('Reports Module Initialized');
@@ -2989,7 +3492,8 @@ function initializeReportsModule() {
     const exportGstBtn = document.getElementById('exportGstBtn');
     if (exportGstBtn) {
         exportGstBtn.addEventListener('click', function () {
-            const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
+            const allInvoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
+            const invoices = allInvoices.filter(inv => !inv.deleted);
             if (invoices.length === 0) {
                 showToast('No invoice data to export', 'warning');
                 return;
@@ -2999,9 +3503,9 @@ function initializeReportsModule() {
             const currentMonth = months[new Date().getMonth()];
             const currentYear = new Date().getFullYear();
 
-            let csvContent = "data:text/csv;charset=utf-8,";
+            let csvContent = "";
             csvContent += `RMK Fly Ash Bricks & Paver Block - ${currentMonth} ${currentYear}\n\n`;
-            csvContent += "Invoice Date,Invoice Number,Customer Name,Customer GST,Tax Type,Taxable Value,CGST,SGST,IGST,Total Tax,Total Amount,Products\n";
+            csvContent += "Invoice Date,Invoice Number,Customer Name,Customer GST,Tax Type,CGST,SGST,Total Tax,Total Amount,Products\n";
 
             invoices.forEach(inv => {
                 const productSummary = (inv.products || []).map(item => `${item.description} (qty:${item.qty})`).join(" | ");
@@ -3021,23 +3525,22 @@ function initializeReportsModule() {
                     inv.customerName,
                     inv.customerGst || 'N/A',
                     inv.taxType,
-                    inv.subtotal,
                     cG,
                     sG,
-                    iG,
                     gstTot,
                     inv.total,
                     productSummary
                 ].map(v => {
-                    const str = String(v ?? '');
+                    const str = String(v != null ? v : '');
                     return `"${str.replace(/"/g, '""')}"`;
                 }).join(",");
                 csvContent += row + "\r\n";
             });
 
-            const encodedUri = encodeURI(csvContent);
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
+            link.setAttribute("href", url);
             link.setAttribute("download", `GST_Report_${currentMonth}_${currentYear}.csv`);
             document.body.appendChild(link);
             link.click();
@@ -3061,7 +3564,7 @@ function initializeReportsModule() {
             const currentMonth = months[new Date().getMonth()];
             const currentYear = new Date().getFullYear();
 
-            let csvContent = "data:text/csv;charset=utf-8,";
+            let csvContent = "";
             csvContent += `RMK Workers Attendance & Salary Report - ${currentMonth} ${currentYear}\n\n`;
             csvContent += "Worker ID,Worker Name,Category,Daily Wage (₹),Present Days,Half Days,Absent Days,Total Days Payable,Salary Payable (₹)\n";
 
@@ -3085,7 +3588,7 @@ function initializeReportsModule() {
 
                 const row = [
                     w.workerId || 'N/A',
-                    w.name || 'N/A',
+                    w.workerName || w.name || 'N/A',
                     w.category || 'N/A',
                     dailyWage,
                     pCount,
@@ -3098,9 +3601,10 @@ function initializeReportsModule() {
                 csvContent += row + "\r\n";
             });
 
-            const encodedUri = encodeURI(csvContent);
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
+            link.setAttribute("href", url);
             link.setAttribute("download", `Attendance_Report_${currentMonth}_${currentYear}.csv`);
             document.body.appendChild(link);
             link.click();
@@ -3118,19 +3622,21 @@ function initializeReportsModule() {
     }
 
     populateGstSummary();
+    initializeGstDownloadCenter();
 }
 
 function populateGstSummary() {
     const tableBody = document.querySelector('#gstSummaryTable tbody');
     if (!tableBody) return;
 
-    const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
+    const allInvoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
+    const invoices = allInvoices.filter(inv => !inv.deleted);
     if (invoices.length === 0) return;
 
     // Group by month
     const summary = {};
     invoices.forEach(inv => {
-        const date = new Date(inv.invDate);
+        const date = parseSafeDate(inv.invDate);
         const monthYear = date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 
         if (!summary[monthYear]) {
@@ -3166,11 +3672,425 @@ function populateGstSummary() {
     });
 }
 
+function initializeGstDownloadCenter() {
+    const monthlySelect = document.getElementById('monthlyGstSelect');
+    const halfYearlySelect = document.getElementById('halfYearlyGstSelect');
+    const financialYearSelect = document.getElementById('financialYearGstSelect');
+
+    if (!monthlySelect || !halfYearlySelect || !financialYearSelect) return;
+
+    const allInvoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
+    const invoices = allInvoices.filter(inv => !inv.deleted);
+    
+    // 1. Gather all unique financial years and months
+    const fyears = new Set();
+    const months = new Set(); // Stores "YYYY-MM"
+    
+    invoices.forEach(inv => {
+        const d = parseSafeDate(inv.invDate);
+        if (!isNaN(d.getTime())) {
+            const y = d.getFullYear();
+            const m = d.getMonth(); // 0-11
+            months.add(`${y}-${String(m + 1).padStart(2, '0')}`);
+            
+            const fyStart = m >= 3 ? y : y - 1;
+            fyears.add(fyStart);
+        }
+    });
+
+    // Fallbacks if empty
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth();
+    if (months.size === 0) {
+        months.add(`${curYear}-${String(curMonth + 1).padStart(2, '0')}`);
+    }
+    if (fyears.size === 0) {
+        fyears.add(curMonth >= 3 ? curYear : curYear - 1);
+    }
+
+    // 2. Populate Monthly Dropdown
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    monthlySelect.innerHTML = '';
+    const sortedMonths = Array.from(months).sort().reverse();
+    sortedMonths.forEach(mStr => {
+        const [y, m] = mStr.split('-').map(Number);
+        const opt = document.createElement('option');
+        opt.value = mStr;
+        opt.textContent = `${monthNames[m - 1]} ${y}`;
+        monthlySelect.appendChild(opt);
+    });
+
+    // 3. Populate Half-Yearly Dropdown
+    halfYearlySelect.innerHTML = '';
+    const sortedFys = Array.from(fyears).sort().reverse();
+    sortedFys.forEach(fy => {
+        const fyCode = `${fy}-${String(fy + 1).slice(-2)}`;
+        
+        const opt1 = document.createElement('option');
+        opt1.value = `${fy}-H1`;
+        opt1.textContent = `H1 (Apr - Sep) ${fyCode}`;
+        halfYearlySelect.appendChild(opt1);
+
+        const opt2 = document.createElement('option');
+        opt2.value = `${fy}-H2`;
+        opt2.textContent = `H2 (Oct - Mar) ${fyCode}`;
+        halfYearlySelect.appendChild(opt2);
+    });
+
+    // 4. Populate Financial Year Dropdown
+    financialYearSelect.innerHTML = '';
+    sortedFys.forEach(fy => {
+        const fyCode = `${fy}-${String(fy + 1).slice(-2)}`;
+        const opt = document.createElement('option');
+        opt.value = fy;
+        opt.textContent = `FY ${fyCode}`;
+        financialYearSelect.appendChild(opt);
+    });
+
+    // 5. Excel Export Helper
+    function exportGstToCsv(filteredInvoices, filename, title) {
+        if (filteredInvoices.length === 0) {
+            showToast('No invoice data in the selected period to export', 'warning');
+            return;
+        }
+
+        let csvContent = "";
+        csvContent += "Invoice Date,Invoice Number,Customer Name,Customer GST,Tax Type,GST %,CGST,SGST,Total Tax,Total Amount,Products\r\n";
+
+        filteredInvoices.forEach(inv => {
+            const productSummary = (inv.products || []).map(item => `${item.description} (qty:${item.qty})`).join(" | ");
+
+            let gstTot = parseFloat(inv.gstTotal);
+            if (isNaN(gstTot) || gstTot === 0) {
+                gstTot = Math.max(0, parseFloat(inv.total) - parseFloat(inv.subtotal));
+            }
+
+            let cG = parseFloat(inv.cgst) || (inv.taxType === 'intra' ? gstTot / 2 : 0);
+            let sG = parseFloat(inv.sgst) || (inv.taxType === 'intra' ? gstTot / 2 : 0);
+            let iG = parseFloat(inv.igst) || (inv.taxType === 'inter' ? gstTot : 0);
+
+            const subtotal = inv.subtotal || inv.total;
+            const gstPercent = (subtotal > 0 && gstTot > 0) ? Math.round((gstTot / subtotal) * 100) + '%' : '0%';
+
+            let formattedInvNum = inv.invNumber || '';
+            formattedInvNum = formattedInvNum.replace(/(\d{2})(\d{2})-(\d{2})(\d{2})/, '$2-$4');
+
+            const row = [
+                inv.invDate,
+                formattedInvNum,
+                inv.customerName,
+                inv.customerGst || 'N/A',
+                inv.taxType,
+                gstPercent,
+                cG,
+                sG,
+                gstTot,
+                inv.total,
+                productSummary
+            ].map(v => {
+                const str = String(v != null ? v : '');
+                return `"${str.replace(/"/g, '""')}"`;
+            }).join(",");
+            csvContent += row + "\r\n";
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast('Excel GST Report exported successfully', 'success');
+    }
+
+    // 6. PDF Print Helper
+    function printGstReport(filteredInvoices, periodLabel) {
+        if (filteredInvoices.length === 0) {
+            showToast('No invoice data in the selected period to print', 'warning');
+            return;
+        }
+
+        const printContainer = document.querySelector('.print-only');
+        if (!printContainer) return;
+
+        // Backup existing print HTML
+        const originalPrintHtml = printContainer.innerHTML;
+
+        let totalTaxable = 0;
+        let totalCgst = 0;
+        let totalSgst = 0;
+        let totalIgst = 0;
+        let totalTax = 0;
+        let totalAmount = 0;
+
+        let tableRowsHtml = '';
+
+        filteredInvoices.forEach(inv => {
+            let gstTot = parseFloat(inv.gstTotal);
+            if (isNaN(gstTot) || gstTot === 0) {
+                gstTot = Math.max(0, parseFloat(inv.total) - parseFloat(inv.subtotal));
+            }
+
+            let cG = parseFloat(inv.cgst) || (inv.taxType === 'intra' ? gstTot / 2 : 0);
+            let sG = parseFloat(inv.sgst) || (inv.taxType === 'intra' ? gstTot / 2 : 0);
+            let iG = parseFloat(inv.igst) || (inv.taxType === 'inter' ? gstTot : 0);
+
+            totalTaxable += parseFloat(inv.subtotal) || 0;
+            totalCgst += cG;
+            totalSgst += sG;
+            totalIgst += iG;
+            totalTax += gstTot;
+            totalAmount += parseFloat(inv.total) || 0;
+
+            tableRowsHtml += `
+                <tr>
+                    <td style="padding:8px; border:1px solid #D1D5DB;">${inv.invDate}</td>
+                    <td style="padding:8px; border:1px solid #D1D5DB;"><strong>${inv.invNumber}</strong></td>
+                    <td style="padding:8px; border:1px solid #D1D5DB;">
+                        <div style="font-weight:600">${inv.customerName}</div>
+                        <small style="color:#4B5563; font-size:0.75rem;">GSTIN: ${inv.customerGst || 'N/A'}</small>
+                    </td>
+                    <td style="text-align:right; padding:8px; border:1px solid #D1D5DB;">₹${parseFloat(inv.subtotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style="text-align:right; padding:8px; border:1px solid #D1D5DB;">₹${cG.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style="text-align:right; padding:8px; border:1px solid #D1D5DB;">₹${sG.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style="text-align:right; padding:8px; border:1px solid #D1D5DB;">₹${iG.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style="text-align:right; font-weight:600; padding:8px; border:1px solid #D1D5DB;">₹${gstTot.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style="text-align:right; font-weight:600; padding:8px; border:1px solid #D1D5DB;">₹${parseFloat(inv.total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                </tr>
+            `;
+        });
+
+        const todayStr = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+
+        printContainer.innerHTML = `
+            <div class="report-print-container" style="font-family:'Inter', sans-serif; color:#111; padding: 20px; width: 100%; box-sizing: border-box;">
+                <div class="report-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom:4px solid #064E3B; padding-bottom:20px; margin-bottom:30px;">
+                    <div class="header-left" style="display:flex; align-items:center; gap:15px;">
+                        <img src="assets/img/logo.png" alt="Logo" class="print-logo" style="height:70px; width:auto;">
+                        <div class="brand-info" style="text-align:left;">
+                            <h2 style="margin:0; font-size:1.6rem; color:#064E3B; font-weight:800;">RMK Groups</h2>
+                            <p style="margin:2px 0 0 0; font-size:0.85rem; color:#4B5563;">Ariyalur Main Road, Perambalur • Phone: +91 99520 68848</p>
+                            <p style="margin:1px 0 0 0; font-size:0.85rem; color:#4B5563; font-weight:600;">GSTIN: 33CFVPK8449D1ZO</p>
+                        </div>
+                    </div>
+                    <div class="header-right" style="text-align:right;">
+                        <h1 class="report-title" style="margin:0; font-size:1.3rem; color:#064E3B; font-weight:800; text-transform:uppercase;">GST TRANSACTION LEDGER</h1>
+                        <div class="report-meta" style="margin-top:5px; font-size:0.85rem; color:#4B5563;">
+                           <div style="margin-bottom:2px;">Period: <strong style="color:#000;">${periodLabel}</strong></div>
+                           <div>Generated: <strong style="color:#000;">${todayStr}</strong></div>
+                       </div>
+                    </div>
+                </div>
+
+                <!-- Consolidated Summary Grid -->
+                <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 30px;">
+                    <div style="background:#F3F4F6; border:1px solid #D1D5DB; border-radius:8px; padding:12px; text-align:center;">
+                        <span style="font-size:0.7rem; color:#4B5563; font-weight:600; text-transform:uppercase; display:block; margin-bottom:4px;">Taxable Value</span>
+                        <h3 style="margin:0; font-size:1.05rem; color:#111827; font-weight:700;">₹${totalTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                    </div>
+                    <div style="background:#ECFDF5; border:1px solid #A7F3D0; border-radius:8px; padding:12px; text-align:center;">
+                        <span style="font-size:0.7rem; color:#065F46; font-weight:600; text-transform:uppercase; display:block; margin-bottom:4px;">CGST</span>
+                        <h3 style="margin:0; font-size:1.05rem; color:#047857; font-weight:700;">₹${totalCgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                    </div>
+                    <div style="background:#ECFDF5; border:1px solid #A7F3D0; border-radius:8px; padding:12px; text-align:center;">
+                        <span style="font-size:0.7rem; color:#065F46; font-weight:600; text-transform:uppercase; display:block; margin-bottom:4px;">SGST</span>
+                        <h3 style="margin:0; font-size:1.05rem; color:#047857; font-weight:700;">₹${totalSgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                    </div>
+                    <div style="background:#EFF6FF; border:1px solid #BFDBFE; border-radius:8px; padding:12px; text-align:center;">
+                        <span style="font-size:0.7rem; color:#1E40AF; font-weight:600; text-transform:uppercase; display:block; margin-bottom:4px;">IGST</span>
+                        <h3 style="margin:0; font-size:1.05rem; color:#1D4ED8; font-weight:700;">₹${totalIgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                    </div>
+                    <div style="background:#FEF2F2; border:1px solid #FCA5A5; border-radius:8px; padding:12px; text-align:center;">
+                        <span style="font-size:0.7rem; color:#991B1B; font-weight:600; text-transform:uppercase; display:block; margin-bottom:4px;">Total GST Tax</span>
+                        <h3 style="margin:0; font-size:1.05rem; color:#B91C1C; font-weight:700;">₹${totalTax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                    </div>
+                </div>
+
+                <!-- Detailed Transaction Table -->
+                <div class="print-table-wrapper" style="margin-bottom: 40px;">
+                    <table class="report-table" style="width:100%; border-collapse:collapse; font-size:0.8rem; text-align:left;">
+                        <thead>
+                            <tr style="background:#E5E7EB; border-bottom:2px solid #9CA3AF;">
+                                <th style="padding:8px; border:1px solid #D1D5DB;">Date</th>
+                                <th style="padding:8px; border:1px solid #D1D5DB;">Invoice No</th>
+                                <th style="padding:8px; border:1px solid #D1D5DB;">Customer Details</th>
+                                <th style="padding:8px; text-align:right; border:1px solid #D1D5DB;">Taxable Value</th>
+                                <th style="padding:8px; text-align:right; border:1px solid #D1D5DB;">CGST</th>
+                                <th style="padding:8px; text-align:right; border:1px solid #D1D5DB;">SGST</th>
+                                <th style="padding:8px; text-align:right; border:1px solid #D1D5DB;">IGST</th>
+                                <th style="padding:8px; text-align:right; border:1px solid #D1D5DB;">Total Tax</th>
+                                <th style="padding:8px; text-align:right; border:1px solid #D1D5DB;">Total Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tableRowsHtml}
+                            <tr style="background:#F3F4F6; font-weight:bold; border-top:2px solid #9CA3AF; border-bottom:2px solid #9CA3AF;">
+                                <td colspan="3" style="padding:10px; border:1px solid #D1D5DB;">Consolidated Period Total</td>
+                                <td style="padding:10px; text-align:right; border:1px solid #D1D5DB;">₹${totalTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td style="padding:10px; text-align:right; border:1px solid #D1D5DB;">₹${totalCgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td style="padding:10px; text-align:right; border:1px solid #D1D5DB;">₹${totalSgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td style="padding:10px; text-align:right; border:1px solid #D1D5DB;">₹${totalIgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td style="padding:10px; text-align:right; border:1px solid #D1D5DB;">₹${totalTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td style="padding:10px; text-align:right; border:1px solid #D1D5DB;">₹${totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Footer with Authorisation -->
+                <div class="report-footer" style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:50px; border-top:1px solid #D1D5DB; padding-top:20px;">
+                    <div class="footer-info" style="font-size:0.75rem; color:#4B5563; line-height:1.4; text-align:left;">
+                        <p style="margin:0;">Generated by RMK Groups Admin System • GSTR-1 Ledger Report</p>
+                        <p style="margin:2px 0 0 0;">Ariyalur Main Road, Perambalur • Customer Care: +91 82488 38593</p>
+                    </div>
+                    <div class="signature-section" style="text-align:center; width:200px;">
+                        <div class="sig-line" style="border-top:1.5px solid #000; padding-top:5px; font-weight:700; font-size:0.8rem;">Authorized Signature</div>
+                        <p style="margin:2px 0 0 0; font-size:0.75rem; color:#4B5563;">RMK Groups</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const originalTitle = document.title;
+        document.title = `RMK_Groups_GST_Report_${periodLabel.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}`;
+
+        window.print();
+
+        // Restore print view & title after print dialog closes
+        setTimeout(() => {
+            document.title = originalTitle;
+            printContainer.innerHTML = originalPrintHtml;
+        }, 1000);
+    }
+
+    // 7. Wire Up Buttons Event Listeners
+
+    // Row 1: Monthly Event Handlers
+    document.getElementById('monthlyGstExcelBtn').addEventListener('click', () => {
+        const val = monthlySelect.value;
+        if (!val) return;
+        const [selYear, selMonth] = val.split('-').map(Number);
+        
+        const filtered = invoices.filter(inv => {
+            const d = parseSafeDate(inv.invDate);
+            return !isNaN(d.getTime()) && (d.getMonth() + 1) === selMonth;
+        });
+        
+        const label = monthlySelect.options[monthlySelect.selectedIndex].textContent;
+        exportGstToCsv(filtered, `GST_Report_Monthly_${label.replace(/\s+/g, '_')}.csv`, `RMK Fly Ash Bricks & Paver Block - Monthly GST Report (${label})`);
+    });
+
+    document.getElementById('monthlyGstPdfBtn').addEventListener('click', () => {
+        const val = monthlySelect.value;
+        if (!val) return;
+        const [selYear, selMonth] = val.split('-').map(Number);
+        
+        const filtered = invoices.filter(inv => {
+            const d = parseSafeDate(inv.invDate);
+            return !isNaN(d.getTime()) && (d.getMonth() + 1) === selMonth;
+        });
+
+        // Sort chronological
+        filtered.sort((a, b) => new Date(a.invDate) - new Date(b.invDate));
+        
+        const label = monthlySelect.options[monthlySelect.selectedIndex].textContent;
+        printGstReport(filtered, `Monthly - ${label}`);
+    });
+
+    // Row 2: Half-Yearly Event Handlers
+    document.getElementById('halfYearlyGstExcelBtn').addEventListener('click', () => {
+        const val = halfYearlySelect.value;
+        if (!val) return;
+        const [selFyStr, half] = val.split('-');
+        const selFy = Number(selFyStr);
+        
+        const filtered = invoices.filter(inv => {
+            const d = parseSafeDate(inv.invDate);
+            if (isNaN(d.getTime())) return false;
+            const m = d.getMonth();
+            const y = d.getFullYear();
+            const fy = m >= 3 ? y : y - 1;
+            const itemHalf = m >= 3 && m <= 8 ? "H1" : "H2";
+            return fy === selFy && itemHalf === half;
+        });
+        
+        const label = halfYearlySelect.options[halfYearlySelect.selectedIndex].textContent;
+        exportGstToCsv(filtered, `GST_Report_HalfYearly_${label.replace(/\s+/g, '_')}.csv`, `RMK Fly Ash Bricks & Paver Block - Half-Yearly GST Report (${label})`);
+    });
+
+    document.getElementById('halfYearlyGstPdfBtn').addEventListener('click', () => {
+        const val = halfYearlySelect.value;
+        if (!val) return;
+        const [selFyStr, half] = val.split('-');
+        const selFy = Number(selFyStr);
+        
+        const filtered = invoices.filter(inv => {
+            const d = parseSafeDate(inv.invDate);
+            if (isNaN(d.getTime())) return false;
+            const m = d.getMonth();
+            const y = d.getFullYear();
+            const fy = m >= 3 ? y : y - 1;
+            const itemHalf = m >= 3 && m <= 8 ? "H1" : "H2";
+            return fy === selFy && itemHalf === half;
+        });
+
+        // Sort chronological
+        filtered.sort((a, b) => new Date(a.invDate) - new Date(b.invDate));
+        
+        const label = halfYearlySelect.options[halfYearlySelect.selectedIndex].textContent;
+        printGstReport(filtered, `Half-Yearly - ${label}`);
+    });
+
+    // Row 3: Financial Year Event Handlers
+    document.getElementById('financialYearGstExcelBtn').addEventListener('click', () => {
+        const val = financialYearSelect.value;
+        if (!val) return;
+        const selFy = Number(val);
+        
+        const filtered = invoices.filter(inv => {
+            const d = parseSafeDate(inv.invDate);
+            if (isNaN(d.getTime())) return false;
+            const m = d.getMonth();
+            const y = d.getFullYear();
+            const fy = m >= 3 ? y : y - 1;
+            return fy === selFy;
+        });
+        
+        const label = financialYearSelect.options[financialYearSelect.selectedIndex].textContent;
+        exportGstToCsv(filtered, `GST_Report_FinancialYear_${label.replace(/\s+/g, '_')}.csv`, `RMK Fly Ash Bricks & Paver Block - Financial Year GST Report (${label})`);
+    });
+
+    document.getElementById('financialYearGstPdfBtn').addEventListener('click', () => {
+        const val = financialYearSelect.value;
+        if (!val) return;
+        const selFy = Number(val);
+        
+        const filtered = invoices.filter(inv => {
+            const d = parseSafeDate(inv.invDate);
+            if (isNaN(d.getTime())) return false;
+            const m = d.getMonth();
+            const y = d.getFullYear();
+            const fy = m >= 3 ? y : y - 1;
+            return fy === selFy;
+        });
+
+        // Sort chronological
+        filtered.sort((a, b) => new Date(a.invDate) - new Date(b.invDate));
+        
+        const label = financialYearSelect.options[financialYearSelect.selectedIndex].textContent;
+        printGstReport(filtered, `Financial Year - ${label}`);
+    });
+}
+
 function loadInvoicesToTable() {
     const tableBody = document.querySelector('#invoices .data-table tbody');
     if (!tableBody) return;
 
-    const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
+    const allInvoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
+    const invoices = allInvoices.filter(inv => !inv.deleted);
 
     // Update Billing Stats - Show TOTAL Billed Revenue for better visibility
     const totalRevenue = invoices.reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0);
@@ -3197,6 +4117,11 @@ function loadInvoicesToTable() {
         const statusClass = balance <= 0 ? 'paid' : (received > 0 ? 'partial' : 'unpaid');
         const statusText = balance <= 0 ? 'Paid' : (received > 0 ? 'Partial' : 'Unpaid');
 
+        const gstTotal = parseFloat(inv.gstTotal) || parseFloat(inv.gstAmount) || 0;
+        const subtotal = inv.subtotal || inv.total;
+        const gstPercent = (subtotal > 0 && gstTotal > 0) ? Math.round((gstTotal / subtotal) * 100) + '%' : '0%';
+        const gstAmtText = gstTotal > 0 ? `₹${gstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-';
+
         tr.innerHTML = `
             <td style="font-weight:600; color:var(--primary)">${inv.invNumber}</td>
             <td>
@@ -3207,11 +4132,16 @@ function loadInvoicesToTable() {
             </td>
             <td>${inv.invDate}</td>
             <td><strong>₹${inv.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></td>
+            <td>${gstPercent}</td>
+            <td>${gstAmtText}</td>
             <td><span class="status-badge ${statusClass}">${statusText}</span></td>
             <td>
                 <div class="action-buttons">
                     <button class="action-btn view" title="View/Print">
                         <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="action-btn edit" title="Edit">
+                        <i class="fas fa-edit"></i>
                     </button>
                     <button class="action-btn payment" title="Record Payment">
                         <i class="fas fa-hand-holding-usd"></i>
@@ -3396,7 +4326,25 @@ document.addEventListener('click', function (e) {
             openPaymentModal(null, custName);
         }
     } else if (target.classList.contains('edit')) {
-        showToast('Edit mode enabled', 'info');
+        const row = target.closest('tr');
+        if (!row) return;
+
+        const id = row.dataset.id;
+        const type = row.dataset.type;
+
+        if (type === 'invoice') {
+            const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
+            const invoice = invoices.find(inv => String(inv.id) === String(id));
+            if (invoice) {
+                if (typeof openEditInvoiceModal === 'function') {
+                    openEditInvoiceModal(invoice);
+                } else {
+                    showToast('Edit functionality is not available.', 'warning');
+                }
+            }
+        } else {
+            showToast('Edit mode enabled', 'info');
+        }
     } else if (target.classList.contains('delete')) {
         if (confirm('Are you sure you want to delete this item?')) {
             const row = target.closest('tr');
@@ -3433,10 +4381,14 @@ document.addEventListener('click', function (e) {
                     }
                 } else if (type === 'invoice') {
                     let data = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
-                    const updated = data.filter(item => item.id != id);
+                    const updated = data.map(item => {
+                        if (String(item.id) === String(id)) item.deleted = true;
+                        return item;
+                    });
                     localStorage.setItem('rmk_invoices', JSON.stringify(updated));
 
-                    if (updated.length === 0) {
+                    const active = updated.filter(item => !item.deleted);
+                    if (active.length === 0) {
                         const tableBody = document.querySelector('#invoices .data-table tbody');
                         if (tableBody) tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem;">No invoices found.</td></tr>`;
                     }

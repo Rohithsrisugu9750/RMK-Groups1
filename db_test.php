@@ -4,10 +4,10 @@ header('Content-Type: text/html; charset=utf-8');
 
 echo "<h2>RMK Groups - Database Connection Diagnostic</h2>";
 
-$host = 'localhost';
-$db   = 'masterbe_rmk_db';
-$user = 'masterbe_rmk_user';
-$pass = 'HP2YEUY5Es[(SJX#';
+$host = '127.0.0.1';
+$db   = 'u496146737_rmk_groups_db';
+$user = 'u496146737_u123_user';
+$pass = 'Rohith@9750';
 
 echo "<b>Attempting connection with credentials:</b><br>";
 echo "Host: " . $host . "<br>";

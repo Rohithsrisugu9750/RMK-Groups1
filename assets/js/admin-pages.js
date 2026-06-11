@@ -59,23 +59,19 @@ function initializeCreateInvoicePage() {
 
     const saveOnlyBtn = document.getElementById('saveInvoiceOnlyBtn');
     if (saveOnlyBtn) {
+        // Prevent duplicate listener since admin.js also listens to this.
+        // We just add a listener to handle redirect AFTER save, giving time for cloud sync.
         saveOnlyBtn.addEventListener('click', function () {
-            if (!validateInvoiceForm()) return;
-            const invoice = buildInvoiceObject(false);
-            saveInvoiceToStorage(invoice);
-            showToast('Invoice saved successfully!', 'success');
-            setTimeout(() => window.location.href = 'admin-billing.html', 1200);
+            // Give enough time for non-keepalive fetch to finish uploading large data
+            setTimeout(() => window.location.href = 'admin-billing.html', 2500);
         });
     }
 
     const form = document.getElementById('invoiceForm');
     if (form) {
         form.addEventListener('submit', function (e) {
-            e.preventDefault();
-            if (!validateInvoiceForm()) return;
-            const invoice = buildInvoiceObject(true);
-            saveInvoiceToStorage(invoice);
-            printInvoice();
+            // Admin.js already handles saving and printing. We just handle redirect if needed.
+            setTimeout(() => window.location.href = 'admin-billing.html', 3000);
         });
     }
 }

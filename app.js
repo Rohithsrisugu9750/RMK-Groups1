@@ -34,7 +34,8 @@ async function testConnection() {
         return true;
     } catch (error) {
         console.error('❌ Failed:', error.message);
-        return false;
+        // Throw error so /db-check can catch it and show details
+        throw error;
     }
 }
 
@@ -72,8 +73,19 @@ app.get('*/health', (req, res) => res.send('App is running! Database name: ' + p
 app.get('/db-check', async (req, res) => {
     try {
         const connected = await testConnection();
-        res.json({ status: connected ? 'connected' : 'failed', host: process.env.DB_HOST });
-    } catch(e) { res.status(500).json({ error: e.message }); }
+        res.json({ 
+            status: connected ? 'connected' : 'failed', 
+            host: process.env.DB_HOST,
+            user: process.env.DB_USER,
+            database: process.env.DB_NAME
+        });
+    } catch(e) { 
+        res.status(500).json({ 
+            status: 'error',
+            message: e.message,
+            stack: e.stack
+        }); 
+    }
 });
 // Support large payloads for image base64 formats
 app.use(express.json({ limit: '50mb' }));
@@ -86,8 +98,10 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Test database connection on startup
-testConnection();
+// Test database connection on startup (wrapped to prevent 503 crashes)
+testConnection().catch(err => {
+    console.error('Initial DB connection failed, but keeping server alive:', err.message);
+});
 
 // Store connected users
 const connectedUsers = new Map();

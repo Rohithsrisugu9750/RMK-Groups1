@@ -1,12 +1,29 @@
-# Final Attempt for Hostinger
+# RMK Groups - Hostinger Production Configuration
+Options -Indexes
+
+# 1. Enable Phusion Passenger for Node.js
 PassengerEnabled on
 PassengerAppType node
 PassengerStartupFile app.js
 
+# 2. Prevent serving source code as static files
+<FilesMatch "^(app\.js|\.env|package\.json|package-lock\.json)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# 3. Routing Logic
 RewriteEngine On
+
+# Ensure sync.php is handled by PHP (don't rewrite if it exists)
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule \.php$ - [L]
+
+# Route /api and other dynamic requests to Node.js
 RewriteCond %{REQUEST_URI} ^/api [NC]
 RewriteRule ^(.*)$ app.js/$1 [L]
 
+# Fallback for SPA-like behavior if file not found
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ app.js/$1 [L]

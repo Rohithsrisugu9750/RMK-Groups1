@@ -162,6 +162,88 @@
             </div>
         </div>
 
+        <!-- GST Download Center (3 Separate Buttons & Selectors) -->
+        <div class="form-row" style="margin-top: 2rem;">
+            <div class="form-group flex-2">
+                <div class="card" style="background: white; padding: 2rem; border-radius: 16px; border: 1px solid #E5E7EB; box-shadow: var(--shadow-md);">
+                    <h3 class="settings-title" style="margin-top: 0; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem; color: var(--primary);">
+                        <i class="fas fa-file-invoice-dollar" style="color: var(--primary);"></i> GST Download Center
+                    </h3>
+                    <p style="font-size: 0.875rem; color: var(--text-light); margin: 0 0 1.5rem 0;">Download GSTR-1 compliant GST reports separately for Monthly, Half-Yearly, or Full Financial Year periods.</p>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                        
+                        <!-- Row 1: Monthly -->
+                        <div class="gst-report-row" style="display: flex; align-items: center; justify-content: space-between; padding: 1.25rem; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 12px; flex-wrap: wrap; gap: 1rem;">
+                            <div style="display: flex; align-items: center; gap: 1rem; flex: 1; min-width: 250px;">
+                                <div style="width: 42px; height: 42px; background: rgba(37,99,235,0.1); color: #2563EB; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-weight: bold;">M</div>
+                                <div>
+                                    <h4 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: #111827;">Monthly GST Report</h4>
+                                    <p style="margin: 0.2rem 0 0 0; font-size: 0.8rem; color: #6B7280;">Single month tax summary & ledger</p>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                                <select id="monthlyGstSelect" class="form-control" style="width: 200px; padding: 0.5rem; height: auto; font-size: 0.9rem; border-radius: 8px;">
+                                    <option value="">Loading months...</option>
+                                </select>
+                                <button class="btn btn-secondary" id="monthlyGstExcelBtn" style="padding: 0.5rem 1rem; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; width: auto; height: auto;">
+                                    <i class="fas fa-file-excel" style="color:#059669;"></i> Excel
+                                </button>
+                                <button class="btn btn-primary" id="monthlyGstPdfBtn" style="padding: 0.5rem 1rem; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; width: auto; height: auto; background: var(--primary);">
+                                    <i class="fas fa-file-pdf"></i> PDF
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Row 2: Half-Yearly -->
+                        <div class="gst-report-row" style="display: flex; align-items: center; justify-content: space-between; padding: 1.25rem; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 12px; flex-wrap: wrap; gap: 1rem;">
+                            <div style="display: flex; align-items: center; gap: 1rem; flex: 1; min-width: 250px;">
+                                <div style="width: 42px; height: 42px; background: rgba(124,58,237,0.1); color: #7C3AED; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-weight: bold;">H</div>
+                                <div>
+                                    <h4 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: #111827;">Half-Yearly GST Report</h4>
+                                    <p style="margin: 0.2rem 0 0 0; font-size: 0.8rem; color: #6B7280;">H1 (Apr-Sep) or H2 (Oct-Mar) tax summary</p>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                                <select id="halfYearlyGstSelect" class="form-control" style="width: 200px; padding: 0.5rem; height: auto; font-size: 0.9rem; border-radius: 8px;">
+                                    <option value="">Loading half-years...</option>
+                                </select>
+                                <button class="btn btn-secondary" id="halfYearlyGstExcelBtn" style="padding: 0.5rem 1rem; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; width: auto; height: auto;">
+                                    <i class="fas fa-file-excel" style="color:#059669;"></i> Excel
+                                </button>
+                                <button class="btn btn-primary" id="halfYearlyGstPdfBtn" style="padding: 0.5rem 1rem; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; width: auto; height: auto; background: var(--primary);">
+                                    <i class="fas fa-file-pdf"></i> PDF
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Row 3: Financial Year -->
+                        <div class="gst-report-row" style="display: flex; align-items: center; justify-content: space-between; padding: 1.25rem; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 12px; flex-wrap: wrap; gap: 1rem;">
+                            <div style="display: flex; align-items: center; gap: 1rem; flex: 1; min-width: 250px;">
+                                <div style="width: 42px; height: 42px; background: rgba(245,158,11,0.1); color: #D97706; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-weight: bold;">Y</div>
+                                <div>
+                                    <h4 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: #111827;">Financial Year GST Report</h4>
+                                    <p style="margin: 0.2rem 0 0 0; font-size: 0.8rem; color: #6B7280;">Full FY (Apr-Mar) consolidated tax ledger</p>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                                <select id="financialYearGstSelect" class="form-control" style="width: 200px; padding: 0.5rem; height: auto; font-size: 0.9rem; border-radius: 8px;">
+                                    <option value="">Loading years...</option>
+                                </select>
+                                <button class="btn btn-secondary" id="financialYearGstExcelBtn" style="padding: 0.5rem 1rem; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; width: auto; height: auto;">
+                                    <i class="fas fa-file-excel" style="color:#059669;"></i> Excel
+                                </button>
+                                <button class="btn btn-primary" id="financialYearGstPdfBtn" style="padding: 0.5rem 1rem; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; width: auto; height: auto; background: var(--primary);">
+                                    <i class="fas fa-file-pdf"></i> PDF
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="form-row" style="margin-top: 2rem;">
             <div class="form-group flex-2">
                 <h3 class="settings-title">Monthly GST Summary (GSTR-1 Ready)</h3>
