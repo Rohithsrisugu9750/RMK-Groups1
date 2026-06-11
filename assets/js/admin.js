@@ -164,20 +164,19 @@ document.addEventListener('DOMContentLoaded', async function () {
             
             const writeEndpoints = ['/sync.php', 'sync.php', 'https://rmkgroups.in/sync.php', '/rmk-sync-write', 'http://localhost:3000/rmk-sync-write'];
             writeEndpoints.forEach(url => {
+                const reqOpts = {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key, value })
+                };
                 try {
-                    fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ key, value }),
-                        keepalive: true
-                    }).catch(() => { });
+                    fetch(url, { ...reqOpts, keepalive: true }).catch(err => {
+                        // Fallback if keepalive fails asynchronously (e.g., 64KB limit in Chrome)
+                        fetch(url, reqOpts).catch(() => { });
+                    });
                 } catch (e) {
-                    // Fallback without keepalive if size exceeds 64KB limit
-                    fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ key, value })
-                    }).catch(() => { });
+                    // Fallback if keepalive fails synchronously
+                    fetch(url, reqOpts).catch(() => { });
                 }
             });
         };
