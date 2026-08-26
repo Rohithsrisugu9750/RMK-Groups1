@@ -3755,10 +3755,11 @@ function initializeGstDownloadCenter() {
         }
 
         let csvContent = "";
-        csvContent += "Invoice Date,Invoice Number,Customer Name,Customer GST,Tax Type,GST %,CGST,SGST,Total Tax,Total Amount,Products\r\n";
+        csvContent += "Invoice Date,Invoice Number,Customer Name,Customer GST,Tax Type,GST %,CGST,SGST,Total Tax,Total Amount,Products,Quantity\r\n";
 
         filteredInvoices.forEach(inv => {
-            const productSummary = (inv.products || []).map(item => `${item.description} (qty:${item.qty})`).join(" | ");
+            const productNames = (inv.products || []).map(item => item.description).join(" | ");
+            const productQuantities = (inv.products || []).map(item => item.qty).join(" | ");
 
             let gstTot = parseFloat(inv.gstTotal);
             if (isNaN(gstTot) || gstTot === 0) {
@@ -3786,7 +3787,8 @@ function initializeGstDownloadCenter() {
                 sG,
                 gstTot,
                 inv.total,
-                productSummary
+                productNames,
+                productQuantities
             ].map(v => {
                 const str = String(v != null ? v : '');
                 return `"${str.replace(/"/g, '""')}"`;
