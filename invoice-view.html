@@ -301,7 +301,7 @@
                    4. Subject to PERAMBALUR Jurisdiction.</p>
             </div>
             <div class="sign-box">
-                <p style="font-size: 12px; margin-bottom: 5px; font-weight: 700;">For <strong>RMK Fly Ash Bricks</strong></p>
+                <p style="font-size: 12px; margin-bottom: 5px; font-weight: 700;">For <strong>RMK FLY ASH BRICKS AND PAVER BLOCKS</strong></p>
                 <img id="printSignature" src="" alt="" style="max-height:40px; display:none; margin:0 auto; padding-bottom:5px;">
                 <div class="sign-line">Authorized Signatory<br><strong style="font-size:0.9em; font-weight:600; display:block; margin-top:3px;">Karthick Raja (CEO)</strong></div>
             </div>
@@ -314,11 +314,10 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Load signature
-            const savedSig = localStorage.getItem('companySignature');
+            // Load hardcoded signature image
             const printSig = document.getElementById('printSignature');
-            if (savedSig && printSig) {
-                printSig.src = savedSig;
+            if (printSig) {
+                printSig.src = 'assets/img/signature.png';
                 printSig.style.display = 'block';
             }
 
