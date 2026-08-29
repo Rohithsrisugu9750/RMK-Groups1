@@ -1303,9 +1303,6 @@ function printInvoice() {
     const printSig = document.getElementById('printSignature');
     if (printSig) {
         printSig.src = 'assets/img/signature.png';
-        printSig.onerror = function() {
-            this.outerHTML = "<p style='color:red; font-size:10px; font-weight:bold; margin-bottom:5px;'>ERROR: signature.png not found!</p>";
-        };
         printSig.style.display = 'block';
     }
 
@@ -2449,9 +2446,6 @@ function printQuote() {
     const printSig = document.getElementById('printSignature');
     if (printSig) {
         printSig.src = 'assets/img/signature.png';
-        printSig.onerror = function() {
-            this.outerHTML = "<p style='color:red; font-size:10px; font-weight:bold; margin-bottom:5px;'>ERROR: signature.png not found!</p>";
-        };
         printSig.style.display = 'block';
     }
 

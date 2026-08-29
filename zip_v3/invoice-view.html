@@ -318,9 +318,6 @@
             const printSig = document.getElementById('printSignature');
             if (printSig) {
                 printSig.src = 'assets/img/signature.png';
-                printSig.onerror = function() {
-                    this.outerHTML = "<p style='color:red; font-size:10px; font-weight:bold; margin-bottom:5px;'>ERROR: signature.png not found!<br>Make sure you uploaded it to assets/img folder<br>and it is exactly lowercase.</p>";
-                };
                 printSig.style.display = 'block';
             }
 
