@@ -3958,7 +3958,7 @@ function initializeGstDownloadCenter() {
                         <p style="margin:2px 0 0 0;">Ariyalur Main Road, Perambalur • Customer Care: +91 82488 38593</p>
                     </div>
                     <div class="signature-section" style="text-align:center; width:200px;">
-                        <div class="sig-line" style="border-top:1.5px solid #000; padding-top:5px; font-weight:700; font-size:0.8rem;">Authorized Signature</div>
+                        <div class="sig-line" style="border-top:1.5px solid #000; padding-top:5px; font-weight:700; font-size:0.8rem;">Authorized Signatory<br><strong style="font-size:0.9em; font-weight:600; display:block; margin-top:3px;">Karthick Raja (CEO)</strong></div>
                         <p style="margin:2px 0 0 0; font-size:0.75rem; color:#4B5563;">RMK Groups</p>
                     </div>
                 </div>
