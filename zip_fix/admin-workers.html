@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - Products | RMK Groups</title>
+    <title>Admin - Workers | RMK Groups</title>
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@700;800;900&display=swap"
         rel="stylesheet">
@@ -13,15 +13,14 @@
 </head>
 
 <body>
-<!-- Preloader Disabled -->
-
     <header class="admin-header">
         <div class="admin-header-content">
             <button class="mobile-sidebar-toggle" id="sidebarToggle">
                 <i class="fas fa-bars"></i>
             </button>
             <div class="admin-logo">
-                <img src="assets/img/logo.png" alt="RMK Groups" style="height: 50px; width: auto;">
+                <i class="fas fa-building"></i>
+                <span class="logo-text">RMK<span>Groups</span></span>
                 <span class="admin-badge">Admin</span>
             </div>
             <div class="admin-user">
@@ -50,7 +49,7 @@
                 <i class="fas fa-users"></i>
                 <span>Customers</span>
             </a>
-            <a href="admin-products.html" class="nav-item active">
+            <a href="admin-products.html" class="nav-item">
                 <i class="fas fa-box"></i>
                 <span>Products</span>
             </a>
@@ -58,18 +57,14 @@
                 <i class="fas fa-warehouse"></i>
                 <span>Inventory</span>
             </a>
+            <a href="admin-workers.html" class="nav-item active">
+                <i class="fas fa-users-gear"></i>
+                <span>Workers</span>
+            </a>
 
             <a href="admin-reports.html" class="nav-item">
                 <i class="fas fa-chart-bar"></i>
                 <span>Reports</span>
-            </a>
-            <a href="admin-workers.html" class="nav-item">
-                <i class="fas fa-user-friends"></i>
-                <span>Workers</span>
-            </a>
-            <a href="admin-attendance.html" class="nav-item">
-                <i class="fas fa-calendar-check"></i>
-                <span>Attendance</span>
             </a>
             <a href="admin-settings.html" class="nav-item">
                 <i class="fas fa-cog"></i>
@@ -87,13 +82,43 @@
     <main class="admin-main">
         <div class="page-header">
             <div>
-                <h1 class="page-title">Products Catalogue</h1>
-                <p class="page-subtitle">Manage products, pricing, and details</p>
+                <h1 class="page-title">Workers</h1>
+                <p class="page-subtitle">Manage worker details and payroll profile</p>
             </div>
             <div class="page-actions">
-                <button class="btn btn-primary" id="addProductBtn">
-                    <i class="fas fa-plus"></i> Add Product
+                <button class="btn btn-primary" id="addWorkerBtn">
+                    <i class="fas fa-user-plus"></i> Add Worker
                 </button>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon blue">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="stat-content">
+                    <h3 class="stat-value" id="totalWorkersCount">0</h3>
+                    <p class="stat-label">Total Workers</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon green">
+                    <i class="fas fa-user-check"></i>
+                </div>
+                <div class="stat-content">
+                    <h3 class="stat-value" id="activeWorkersCount">0</h3>
+                    <p class="stat-label">Active Now</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon purple">
+                    <i class="fas fa-money-bill-wave"></i>
+                </div>
+                <div class="stat-content">
+                    <h3 class="stat-value" id="monthlyPayroll">₹0</h3>
+                    <p class="stat-label">Estimated Payroll</p>
+                </div>
             </div>
         </div>
 
@@ -101,120 +126,103 @@
             <div class="table-controls" style="padding: 1.5rem;">
                 <div class="search-box">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="searchInput" placeholder="Search products...">
+                    <input type="text" id="workerSearchInput" placeholder="Search workers...">
                 </div>
                 <div class="filter-group">
-                    <select class="filter-select">
-                        <option>Category: All</option>
-                        <option>Bricks</option>
-                        <option>Pavers</option>
-                        <option>Aggregates</option>
+                    <select class="filter-select" id="workerCategoryFilter">
+                        <option value="All">Category: All</option>
+                        <option value="Mason">Mason</option>
+                        <option value="Helper">Helper</option>
+                        <option value="Driver">Driver</option>
+                        <option value="Operator">Operator</option>
                     </select>
                 </div>
             </div>
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>Product Name</th>
+                        <th>Worker ID</th>
+                        <th>Name</th>
                         <th>Category</th>
-                        <th>Unit Price</th>
-                        <th>GST</th>
-                        <th>Stock Status</th>
-                        <th>Last Updated</th>
+                        <th>Phone</th>
+                        <th>Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <!-- Data cleared -->
+                <tbody id="workerTableBody">
                     <tr>
-                        <td colspan="6" style="text-align: center; padding: 2rem;">
-                            No products found in catalogue.
+                        <td colspan="7" style="text-align: center; padding: 2rem;">
+                            No workers found.
                         </td>
                     </tr>
                 </tbody>
             </table>
         </div>
     </main>
-    <!-- Add Product Modal -->
-    <div class="modal" id="addProductModal">
+
+    <!-- Add Worker Modal -->
+    <div class="modal" id="addWorkerModal">
         <div class="modal-overlay"></div>
         <div class="modal-container" style="max-width: 600px;">
             <div class="modal-header">
                 <h2 class="modal-title">
-                    <i class="fas fa-box"></i>
-                    Add New Product
+                    <i class="fas fa-user-plus"></i>
+                    Add New Worker
                 </h2>
-                <button class="modal-close" id="closeProductModal">
+                <button class="modal-close" id="closeWorkerModal">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <div class="modal-body">
-                <form id="addProductForm">
-                    <div class="form-group" style="margin-bottom: 1.25rem;">
-                        <label>Product Name *</label>
-                        <input type="text" class="form-control" name="productName"
-                            placeholder="e.g. Fly Ash Brick - Standard" required>
-                    </div>
+                <form id="addWorkerForm">
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Product Code / SKU *</label>
-                            <input type="text" class="form-control" name="sku" placeholder="e.g. FAB-001" required>
+                            <label>Worker ID *</label>
+                            <input type="text" class="form-control" name="workerId" placeholder="e.g. RMK001" required>
                         </div>
+                        <div class="form-group">
+                            <label>Full Name *</label>
+                            <input type="text" class="form-control" name="workerName" placeholder="Full Name" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group">
                             <label>Category *</label>
                             <select class="form-control" name="category" required>
-                                <option value="">Select Category</option>
-                                <option value="Bricks">Bricks</option>
-                                <option value="Pavers">Pavers</option>
-                                <option value="Aggregates">Aggregates</option>
-                                <option value="Machinery">Machinery</option>
+                                <option value="Mason">Mason</option>
+                                <option value="Helper">Helper</option>
+                                <option value="Driver">Driver</option>
+                                <option value="Operator">Operator</option>
+                                <option value="Supervisor">Supervisor</option>
                             </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Phone Number *</label>
+                            <input type="tel" class="form-control" name="phone" placeholder="+91 98765 43210" required>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Unit Price (₹) *</label>
-                            <input type="number" class="form-control" name="price" placeholder="0.00" step="0.01"
-                                required>
-                        </div>
-                        <div class="form-group">
-                            <label>Price Unit</label>
-                            <select class="form-control" name="unit">
-                                <option value="piece">Per Piece</option>
-                                <option value="sqft">Per Sq.ft</option>
-                                <option value="ton">Per Ton</option>
-                                <option value="bag">Per Bag</option>
-                            </select>
+                            <label>Join Date</label>
+                            <input type="date" class="form-control" name="joinDate">
                         </div>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Initial Stock Quantity</label>
-                            <input type="number" class="form-control" name="stock" placeholder="0" value="0">
-                        </div>
-                        <div class="form-group">
-                            <label>GST Rate (%) *</label>
-                            <select class="form-control" name="gstRate" required>
-                                <option value="0">0% (Nil)</option>
-                                <option value="5">5%</option>
-                                <option value="12">12%</option>
-                                <option value="18" selected>18%</option>
-                                <option value="28">28%</option>
-                            </select>
-                        </div>
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                        <label>Address</label>
+                        <textarea class="form-control" name="address" rows="2"
+                            placeholder="Residential Address"></textarea>
                     </div>
 
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" id="cancelProductBtn">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Add Product</button>
+                        <button type="button" class="btn btn-secondary" id="cancelWorkerBtn">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Add Worker</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="assets/js/admin.js?v=3.0"></script>
+    <script src="assets/js/admin.js?v=2.3"></script>
 </body>
 
 </html>
