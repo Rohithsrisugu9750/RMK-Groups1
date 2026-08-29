@@ -3504,11 +3504,9 @@ function initializeReportsModule() {
 
             let csvContent = "";
             csvContent += `RMK Fly Ash Bricks & Paver Block - ${currentMonth} ${currentYear}\n\n`;
-            csvContent += "Invoice Date,Invoice Number,Customer Name,Customer GST,Tax Type,CGST,SGST,Total Tax,Total Amount,Products\n";
+            csvContent += "Invoice Date,Invoice Number,Customer Name,Customer GST,Tax Type,CGST,SGST,Total Tax,Total Amount,Product,Quantity\n";
 
             invoices.forEach(inv => {
-                const productSummary = (inv.products || []).map(item => `${item.description} (qty:${item.qty})`).join(" | ");
-
                 let gstTot = parseFloat(inv.gstTotal);
                 if (isNaN(gstTot) || gstTot === 0) {
                     gstTot = Math.max(0, parseFloat(inv.total) - parseFloat(inv.subtotal));
@@ -3518,22 +3516,30 @@ function initializeReportsModule() {
                 let sG = parseFloat(inv.sgst) || (inv.taxType === 'intra' ? gstTot / 2 : 0);
                 let iG = parseFloat(inv.igst) || (inv.taxType === 'inter' ? gstTot : 0);
 
-                const row = [
-                    inv.invDate,
-                    inv.invNumber,
-                    inv.customerName,
-                    inv.customerGst || 'N/A',
-                    inv.taxType,
-                    cG,
-                    sG,
-                    gstTot,
-                    inv.total,
-                    productSummary
-                ].map(v => {
-                    const str = String(v != null ? v : '');
-                    return `"${str.replace(/"/g, '""')}"`;
-                }).join(",");
-                csvContent += row + "\r\n";
+                const products = inv.products || [];
+                if (products.length === 0) {
+                    products.push({ description: 'N/A', qty: 0 });
+                }
+
+                products.forEach((prod, index) => {
+                    const row = [
+                        inv.invDate,
+                        inv.invNumber,
+                        inv.customerName,
+                        inv.customerGst || 'N/A',
+                        inv.taxType,
+                        index === 0 ? cG : 0,
+                        index === 0 ? sG : 0,
+                        index === 0 ? gstTot : 0,
+                        index === 0 ? inv.total : 0,
+                        prod.description,
+                        prod.qty
+                    ].map(v => {
+                        const str = String(v != null ? v : '');
+                        return `"${str.replace(/"/g, '""')}"`;
+                    }).join(",");
+                    csvContent += row + "\r\n";
+                });
             });
 
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -3755,11 +3761,9 @@ function initializeGstDownloadCenter() {
         }
 
         let csvContent = "";
-        csvContent += "Invoice Date,Invoice Number,Customer Name,Customer GST,Tax Type,GST %,CGST,SGST,Total Tax,Total Amount,Products\r\n";
+        csvContent += "Invoice Date,Invoice Number,Customer Name,Customer GST,Tax Type,GST %,CGST,SGST,Total Tax,Total Amount,Product,Quantity\r\n";
 
         filteredInvoices.forEach(inv => {
-            const productSummary = (inv.products || []).map(item => `${item.description} (qty:${item.qty})`).join(" | ");
-
             let gstTot = parseFloat(inv.gstTotal);
             if (isNaN(gstTot) || gstTot === 0) {
                 gstTot = Math.max(0, parseFloat(inv.total) - parseFloat(inv.subtotal));
@@ -3775,23 +3779,31 @@ function initializeGstDownloadCenter() {
             let formattedInvNum = inv.invNumber || '';
             formattedInvNum = formattedInvNum.replace(/(\d{2})(\d{2})-(\d{2})(\d{2})/, '$2-$4');
 
-            const row = [
-                inv.invDate,
-                formattedInvNum,
-                inv.customerName,
-                inv.customerGst || 'N/A',
-                inv.taxType,
-                gstPercent,
-                cG,
-                sG,
-                gstTot,
-                inv.total,
-                productSummary
-            ].map(v => {
-                const str = String(v != null ? v : '');
-                return `"${str.replace(/"/g, '""')}"`;
-            }).join(",");
-            csvContent += row + "\r\n";
+            const products = inv.products || [];
+            if (products.length === 0) {
+                products.push({ description: 'N/A', qty: 0 });
+            }
+
+            products.forEach((prod, index) => {
+                const row = [
+                    inv.invDate,
+                    formattedInvNum,
+                    inv.customerName,
+                    inv.customerGst || 'N/A',
+                    inv.taxType,
+                    index === 0 ? gstPercent : '0%',
+                    index === 0 ? cG : 0,
+                    index === 0 ? sG : 0,
+                    index === 0 ? gstTot : 0,
+                    index === 0 ? inv.total : 0,
+                    prod.description,
+                    prod.qty
+                ].map(v => {
+                    const str = String(v != null ? v : '');
+                    return `"${str.replace(/"/g, '""')}"`;
+                }).join(",");
+                csvContent += row + "\r\n";
+            });
         });
 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
