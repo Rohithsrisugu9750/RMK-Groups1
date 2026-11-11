@@ -220,7 +220,7 @@ app.get('/rmk-cloud-sync', async (req, res) => {
     }
 });
 
-app.post('/rmk-sync-write', async (req, res) => {
+app.post(['/rmk-sync-write', '/sync.php'], async (req, res) => {
     const { key, value } = req.body;
     
     // Ignore volatile local session keys
@@ -296,6 +296,32 @@ app.post('/rmk-sync-write', async (req, res) => {
 });
 
 // Start Server automatically depending on environment (like Render/Heroku defaults to process.env.PORT)
+
+function getInvoiceSortKey(inv) {
+    const match = String((inv && inv.invNumber) || '').match(/INV-(\d{4}|\d{2})-(\d{4}|\d{2})-(\d+)/i);
+    if (match) {
+        let fy = parseInt(match[1], 10);
+        if (fy < 100) fy += 2000;
+        return (fy * 1000000) + (parseInt(match[3], 10) || 0);
+    }
+    const num = parseInt((String((inv && inv.invNumber) || '').match(/(\d+)$/) || [0, 0])[1], 10) || 0;
+    if (num > 0) return 2026000000 + num;
+    return inv && inv.invDate ? new Date(inv.invDate).getTime() : (parseInt(inv && inv.id) || 0);
+}
+
+function sortInvoicesLatestToOld(list) {
+    if (!Array.isArray(list)) return [];
+    return list.slice().sort((a, b) => {
+        const kA = getInvoiceSortKey(a);
+        const kB = getInvoiceSortKey(b);
+        if (kA !== kB) return kB - kA;
+        const dA = a && a.invDate ? new Date(a.invDate).getTime() : 0;
+        const dB = b && b.invDate ? new Date(b.invDate).getTime() : 0;
+        if (dA !== dB) return dB - dA;
+        return (parseInt(b && b.id) || 0) - (parseInt(a && a.id) || 0);
+    });
+}
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`RMK Cloud Sync Server running on port ${PORT}`);

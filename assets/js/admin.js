@@ -9,6 +9,48 @@ function safeJsonParse(str, fallback = []) {
     }
 }
 
+function sortInvoicesLatestToOld(list) {
+    if (!Array.isArray(list)) return [];
+    return list.slice().sort((a, b) => {
+        const matchA = String((a && a.invNumber) || '').match(/INV-(\d{4}|\d{2})-(\d{4}|\d{2})-(\d+)/i);
+        const matchB = String((b && b.invNumber) || '').match(/INV-(\d{4}|\d{2})-(\d{4}|\d{2})-(\d+)/i);
+
+        let keyA = 0;
+        let keyB = 0;
+
+        if (matchA) {
+            let fy = parseInt(matchA[1], 10);
+            if (fy < 100) fy += 2000;
+            keyA = (fy * 1000000) + (parseInt(matchA[3], 10) || 0);
+        } else {
+            const numA = parseInt((String((a && a.invNumber) || '').match(/(\d+)$/) || [0, 0])[1], 10) || 0;
+            if (numA > 0) keyA = 2026000000 + numA;
+        }
+
+        if (matchB) {
+            let fy = parseInt(matchB[1], 10);
+            if (fy < 100) fy += 2000;
+            keyB = (fy * 1000000) + (parseInt(matchB[3], 10) || 0);
+        } else {
+            const numB = parseInt((String((b && b.invNumber) || '').match(/(\d+)$/) || [0, 0])[1], 10) || 0;
+            if (numB > 0) keyB = 2026000000 + numB;
+        }
+
+        if (keyA !== keyB) {
+            return keyB - keyA; // Highest number first (186, 185...)
+        }
+
+        const dateA = a && a.invDate ? new Date(a.invDate).getTime() : 0;
+        const dateB = b && b.invDate ? new Date(b.invDate).getTime() : 0;
+        if (dateA !== dateB) {
+            return dateB - dateA;
+        }
+
+        return (parseInt(b && b.id) || 0) - (parseInt(a && a.id) || 0);
+    });
+}
+
+
 document.addEventListener('DOMContentLoaded', async function () {
     // 2. Hide Preloader instantly
     const preloader = document.querySelector('.preloader');
@@ -118,7 +160,25 @@ document.addEventListener('DOMContentLoaded', async function () {
                                     }
                                 } 
                             });
-                            const merged = Array.from(dataMap.values()).sort((a, b) => b.id - a.id);
+                            let merged = Array.from(dataMap.values());
+                            if (key === 'rmk_invoices') {
+                                const dedupMap = new Map();
+                                merged.forEach(item => {
+                                    if (!item || !item.invNumber) return;
+                                    const dedupKey = item.invNumber + '__' + (item.customerName || '');
+                                    const existing = dedupMap.get(dedupKey);
+                                    if (!existing) {
+                                        dedupMap.set(dedupKey, item);
+                                    } else {
+                                        const timeA = new Date(item.timestamp || 0).getTime();
+                                        const timeB = new Date(existing.timestamp || 0).getTime();
+                                        if (timeA >= timeB) dedupMap.set(dedupKey, item);
+                                    }
+                                });
+                                merged = sortInvoicesLatestToOld(Array.from(dedupMap.values()));
+                            } else {
+                                merged.sort((a, b) => (parseInt(b.id) || 0) - (parseInt(a.id) || 0));
+                            }
                             localStorage.setItem(key, JSON.stringify(merged));
                         } else {
                             localStorage.setItem(key, typeof cloudValue === 'string' ? cloudValue : JSON.stringify(cloudValue));
@@ -724,6 +784,12 @@ function initializeInvoiceModalLogic() {
         }
         invoiceModal.classList.remove('active');
         document.body.style.overflow = 'auto';
+        const formEl = document.getElementById('invoiceForm');
+        if (formEl) delete formEl.dataset.editId;
+        const titleEl = invoiceModal.querySelector('.modal-title');
+        if (titleEl) {
+            titleEl.innerHTML = '<i class="fas fa-file-invoice-dollar"></i> Create New Invoice';
+        }
     };
 
     closeInvoiceModal?.addEventListener('click', closeModal);
@@ -1346,6 +1412,10 @@ function saveInvoiceOnly() {
     if (invoiceModal) {
         invoiceModal.classList.remove('active');
         document.body.style.overflow = 'auto';
+        const formEl = document.getElementById('invoiceForm');
+        if (formEl) delete formEl.dataset.editId;
+        const titleEl = invoiceModal.querySelector('.modal-title');
+        if (titleEl) titleEl.innerHTML = '<i class="fas fa-file-invoice-dollar"></i> Create New Invoice';
     }
 
     showToast('Invoice saved successfully!', 'success');
@@ -1658,8 +1728,17 @@ function saveInvoiceToStorage() {
     const formEl = document.getElementById('invoiceForm');
     const editId = formEl ? formEl.dataset.editId : null;
 
-    if (!editId) {
-        // COMMIT the invoice number officially to the counter now that we are actually saving/printing
+    const invoicesList = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
+    let isExisting = false;
+    if (editId) {
+        isExisting = invoicesList.some(inv => String(inv.id) === String(editId));
+    }
+    if (!isExisting && invNumber) {
+        isExisting = invoicesList.some(inv => String(inv.invNumber || '').trim().toLowerCase() === String(invNumber).trim().toLowerCase() && !inv.deleted);
+    }
+
+    if (!isExisting) {
+        // Only COMMIT counter for truly NEW invoices
         generateFinancialYearInvoiceNumber('invoice', invNumber, true);
     }
 
@@ -1802,21 +1881,25 @@ function saveInvoiceToStorage() {
 
     const invoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
     
+    let targetIndex = -1;
     if (editId) {
-        const index = invoices.findIndex(inv => String(inv.id) === String(editId));
-        if (index !== -1) {
-            invoiceData.id = invoices[index].id;
-            invoiceData.timestamp = new Date().toISOString();
-            invoices[index] = invoiceData;
-        } else {
-            invoices.unshift(invoiceData);
-        }
+        targetIndex = invoices.findIndex(inv => String(inv.id) === String(editId));
+    }
+    if (targetIndex === -1 && invNumber) {
+        targetIndex = invoices.findIndex(inv => String(inv.invNumber || '').trim().toLowerCase() === String(invNumber).trim().toLowerCase() && !inv.deleted);
+    }
+
+    if (targetIndex !== -1) {
+        invoiceData.id = invoices[targetIndex].id;
+        invoiceData.timestamp = new Date().toISOString();
+        invoices[targetIndex] = invoiceData;
         if (formEl) delete formEl.dataset.editId;
     } else {
         invoices.unshift(invoiceData);
     }
     
-    localStorage.setItem('rmk_invoices', JSON.stringify(invoices));
+    const sortedInvoices = sortInvoicesLatestToOld(invoices);
+    localStorage.setItem('rmk_invoices', JSON.stringify(sortedInvoices));
 
     if (window.realtimeManager) {
         window.realtimeManager.emitNewInvoice(invoiceData);
@@ -1829,6 +1912,10 @@ window.openEditInvoiceModal = function(invoice) {
     
     const formEl = document.getElementById('invoiceForm');
     if (formEl) formEl.dataset.editId = invoice.id;
+    const titleEl = modal.querySelector('.modal-title');
+    if (titleEl) {
+        titleEl.innerHTML = '<i class="fas fa-edit"></i> Edit Invoice (' + (invoice.invNumber || '') + ')';
+    }
     
     if (document.getElementById('invNumber')) document.getElementById('invNumber').value = invoice.invNumber || '';
     if (document.getElementById('invDate')) document.getElementById('invDate').value = invoice.invDate || '';
@@ -3751,15 +3838,19 @@ function initializeGstDownloadCenter() {
 
     // 5. Excel Export Helper
     function exportGstToCsv(filteredInvoices, filename, title) {
-        if (filteredInvoices.length === 0) {
+        if (!filteredInvoices || filteredInvoices.length === 0) {
             showToast('No invoice data in the selected period to export', 'warning');
             return;
         }
 
+        const sortedInvoices = sortInvoicesLatestToOld(filteredInvoices);
+
         let csvContent = "";
         csvContent += "Invoice Date,Invoice Number,Customer Name,Customer GST,Tax Type,GST %,CGST,SGST,Total Tax,Total Amount,Product,Quantity\r\n";
 
-        filteredInvoices.forEach(inv => {
+        sortedInvoices.forEach(inv => {
+            const productNames = (inv.products || []).map(item => item.description).join(" | ");
+            const productQuantities = (inv.products || []).map(item => item.qty).join(" | ");
             let gstTot = parseFloat(inv.gstTotal);
             if (isNaN(gstTot) || gstTot === 0) {
                 gstTot = Math.max(0, parseFloat(inv.total) - parseFloat(inv.subtotal));
@@ -4098,7 +4189,7 @@ function loadInvoicesToTable() {
     if (!tableBody) return;
 
     const allInvoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
-    const invoices = allInvoices.filter(inv => !inv.deleted);
+    const invoices = sortInvoicesLatestToOld(allInvoices.filter(inv => !inv.deleted));
 
     // Update Billing Stats - Show TOTAL Billed Revenue for better visibility
     const totalRevenue = invoices.reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0);

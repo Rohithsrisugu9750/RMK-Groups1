@@ -90,7 +90,19 @@ function initializeCreateInvoicePage() {
     const form = document.getElementById('invoiceForm');
     if (form) {
         form.addEventListener('submit', function (e) {
-    return { id: Date.now(), invNumber: invNumber, customerName: custName, mobile: mobile, gst: gst, address: address, date: invDate, items: items, subtotal: subtotal, gstRate: gstRate, gstAmount: gstAmount, total: total, receivedAmount: received, balance: balance, status: status, notes: notes, taxType: taxTypeEl ? taxTypeEl.value : 'intra', createdAt: new Date().toISOString() };
+            e.preventDefault();
+            if (typeof saveInvoiceToStorage === 'function') {
+                saveInvoiceToStorage();
+            }
+            if (typeof printInvoice === 'function') {
+                printInvoice();
+            } else {
+                window.print();
+            }
+            showToast('Invoice saved & printed!', 'success');
+            setTimeout(() => { window.location.href = 'admin-billing.html'; }, 2500);
+        });
+    }
 }
 
 // ============================================================
