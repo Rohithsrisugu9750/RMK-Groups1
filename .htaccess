@@ -1,29 +1,37 @@
-# RMK Groups - Hostinger Production Configuration
+# RMK Groups - Production Security & Routing Configuration
 Options -Indexes
 
-# 1. Enable Phusion Passenger for Node.js
+# 1. Block access to hidden files (.env, .git, etc.)
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+</FilesMatch>
+
+# 2. Block access to backend source files, databases, configs & credentials
+<FilesMatch "(\.env|\.env.*|\.sql|\.md|package.*\.json|app\.js)$">
+    Order allow,deny
+    Deny from all
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+</FilesMatch>
+
+# 3. Enable Phusion Passenger for Node.js
 PassengerEnabled on
 PassengerAppType node
 PassengerStartupFile app.js
 
-# 2. Prevent serving source code as static files
-<FilesMatch "^(app\.js|\.env|package\.json|package-lock\.json)$">
-    Order allow,deny
-    Deny from all
-</FilesMatch>
-
-# 3. Routing Logic
+# 4. Routing Logic
 RewriteEngine On
 
-# Ensure sync.php is handled by PHP (don't rewrite if it exists)
-RewriteCond %{REQUEST_FILENAME} -f
-RewriteRule \.php$ - [L]
-
-# Route /api and other dynamic requests to Node.js
-RewriteCond %{REQUEST_URI} ^/api [NC]
+# Route /api, /rmk-cloud-sync, /rmk-sync-write and dynamic requests to Node.js
+RewriteCond %{REQUEST_URI} ^/(api|rmk-cloud-sync|rmk-sync-write|socket\.io) [NC]
 RewriteRule ^(.*)$ app.js/$1 [L]
 
-# Fallback for SPA-like behavior if file not found
+# Fallback for dynamic requests if static file/dir not found
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ app.js/$1 [L]

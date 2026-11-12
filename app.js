@@ -6,6 +6,19 @@ const { Server } = require("socket.io");
 const mysql = require('mysql2/promise');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
+// Security & Authentication Configuration
+const SYNC_AUTH_TOKEN = process.env.SYNC_AUTH_TOKEN || 'rmk_sec_99520_karthick_raja_auth_token_2026';
+
+function authenticateSync(req, res, next) {
+    const clientAuth = req.headers['x-rmk-auth'] || req.query.auth;
+    if (!clientAuth || clientAuth !== SYNC_AUTH_TOKEN) {
+        return res.status(401).json({ 
+            error: 'Unauthorized: Authentication required to access RMK database.' 
+        });
+    }
+    next();
+}
+
 // Database Configuration
 const pool = mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
@@ -69,24 +82,34 @@ app.all('*/socket.io/*', (req, res) => {
     }
 });
 
-app.get('*/health', (req, res) => res.send('App is running! Database name: ' + process.env.DB_NAME));
-app.get('/db-check', async (req, res) => {
+// Public health check without leaking credentials or database names
+app.get('*/health', (req, res) => res.json({ status: 'ok', service: 'RMK Cloud API' }));
+
+// Authenticated DB check
+app.get('/db-check', authenticateSync, async (req, res) => {
     try {
         const connected = await testConnection();
-        res.json({ 
-            status: connected ? 'connected' : 'failed', 
-            host: process.env.DB_HOST,
-            user: process.env.DB_USER,
-            database: process.env.DB_NAME
-        });
+        res.json({ status: connected ? 'connected' : 'failed' });
     } catch(e) { 
-        res.status(500).json({ 
-            status: 'error',
-            message: e.message,
-            stack: e.stack
-        }); 
+        res.status(500).json({ status: 'error', message: 'Database connection failed' }); 
     }
 });
+
+// Security Barrier: Block requests to sensitive files before static serving
+app.use((req, res, next) => {
+    const blockedPatterns = [
+        /^\/\.env/i,
+        /^\/\.git/i,
+        /package(-lock)?\.json$/i,
+        /\.sql$/i,
+        /db_test/i
+    ];
+    if (blockedPatterns.some(regex => regex.test(req.path))) {
+        return res.status(403).json({ error: 'Access Forbidden' });
+    }
+    next();
+});
+
 // Support large payloads for image base64 formats
 app.use(express.json({ limit: '50mb' }));
 
@@ -208,8 +231,8 @@ io.on('connection', (socket) => {
 // Make io available to routes
 app.set('io', io);
 
-// UNIQUE SYNC ENDPOINTS (Cleaned for better routing)
-app.get('/rmk-cloud-sync', async (req, res) => {
+// AUTHENTICATED SYNC ENDPOINTS
+app.get('/rmk-cloud-sync', authenticateSync, async (req, res) => {
     try {
         const [rows] = await pool.execute('SELECT data_key, data_value FROM app_data');
         const result = {};
@@ -220,7 +243,7 @@ app.get('/rmk-cloud-sync', async (req, res) => {
     }
 });
 
-app.post(['/rmk-sync-write', '/sync.php'], async (req, res) => {
+app.post(['/rmk-sync-write', '/sync.php'], authenticateSync, async (req, res) => {
     const { key, value } = req.body;
     
     // Ignore volatile local session keys

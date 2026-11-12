@@ -81,10 +81,11 @@ document.addEventListener('DOMContentLoaded', async function () {
         console.warn('Migration error', e);
     }
 
+    // Secure Authentication Token for Cloud Database Sync
+    const RMK_AUTH_TOKEN = 'rmk_sec_99520_karthick_raja_auth_token_2026';
+
     /**
-     * CLOUD SYNCHRONIZATION SYSTEM (PHP-Direct Mode)
-     * Uses sync.php directly - runs on the same Hostinger server as MySQL.
-     * This is the most reliable method and avoids Node.js port/firewall issues.
+     * CLOUD SYNCHRONIZATION SYSTEM (Authenticated Express API)
      */
     async function syncWithCloud() {
         if (window._isCloudSyncing) return;
@@ -99,13 +100,16 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         try {
             let cloudData = null;
-            const endpoints = ['/rmk-cloud-sync', '/api/data', '/sync.php'];
+            const endpoints = ['/rmk-cloud-sync', 'https://rmkgroups.in/rmk-cloud-sync'];
             let lastError = null;
 
             for (let url of endpoints) {
                 console.log(`Trying sync endpoint: ${url}`);
                 try {
-                    const response = await fetch(url, { cache: 'no-cache' });
+                    const response = await fetch(url, { 
+                        cache: 'no-cache',
+                        headers: { 'x-rmk-auth': RMK_AUTH_TOKEN }
+                    });
                     if (response.ok) {
                         const text = await response.text();
                         console.log(`Response from ${url} received`);
@@ -222,20 +226,21 @@ document.addEventListener('DOMContentLoaded', async function () {
             originalSetItem(key, value);
             if (window._isApplyingCloudData || !key.startsWith('rmk_') || key === 'rmk_session') return;
             
-            const writeEndpoints = ['/sync.php', 'sync.php', 'https://rmkgroups.in/sync.php', '/rmk-sync-write', 'http://localhost:3000/rmk-sync-write'];
+            const writeEndpoints = ['/rmk-sync-write', 'https://rmkgroups.in/rmk-sync-write'];
             writeEndpoints.forEach(url => {
                 const reqOpts = {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-rmk-auth': RMK_AUTH_TOKEN
+                    },
                     body: JSON.stringify({ key, value })
                 };
                 try {
                     fetch(url, { ...reqOpts, keepalive: true }).catch(err => {
-                        // Fallback if keepalive fails asynchronously (e.g., 64KB limit in Chrome)
                         fetch(url, reqOpts).catch(() => { });
                     });
                 } catch (e) {
-                    // Fallback if keepalive fails synchronously
                     fetch(url, reqOpts).catch(() => { });
                 }
             });

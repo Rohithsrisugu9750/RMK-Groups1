@@ -1,0 +1,26 @@
+# Environment variables - CRITICAL SECURITY: Never commit secrets!
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archives & Temporary Deployment Bundles
+*.zip
+zip_*/
+*.tar.gz
+*.rar
+
+# Diagnostics & Logs
+*.log
+scratch/
+test_*.js
+check_*.js
+apply_*.js
+migrate_*.js
+verify_*.js
+sync_*.js

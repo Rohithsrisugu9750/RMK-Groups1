@@ -1,20 +1,14 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    // --- CLOUD BOOT SYNCHRONIZER (IMPROVED) ---
+    const RMK_AUTH_TOKEN = 'rmk_sec_99520_karthick_raja_auth_token_2026';
+
+    // --- CLOUD BOOT SYNCHRONIZER (SECURE AUTHENTICATED) ---
     async function performLoginSync() {
         try {
-            // Try endpoints in sequence
-            let res = await fetch('/rmk-cloud-sync').catch(() => null);
+            const authHeaders = { 'x-rmk-auth': RMK_AUTH_TOKEN };
+            let res = await fetch('/rmk-cloud-sync', { headers: authHeaders }).catch(() => null);
             
             if (!res || !res.ok) {
-                res = await fetch('/sync.php').catch(() => null);
-            }
-
-            if (!res || !res.ok) {
-                res = await fetch('sync.php').catch(() => null);
-            }
-
-            if (!res || !res.ok) {
-                res = await fetch('https://rmkgroups.in/sync.php').catch(() => null);
+                res = await fetch('https://rmkgroups.in/rmk-cloud-sync', { headers: authHeaders }).catch(() => null);
             }
 
             if(res && res.ok) {
