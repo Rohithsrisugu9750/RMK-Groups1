@@ -556,6 +556,7 @@ function generateFinancialYearInvoiceNumber(type = 'invoice', manualValue = null
     let maxCounter = 0;
     
     records.forEach(rec => {
+        if (rec && rec.deleted) return;
         const numStr = type === 'invoice' ? rec.invNumber : rec.quoteNumber;
         if (numStr && numStr.includes(fyCode)) { // Only count for current FY
             const parts = numStr.split('-');
@@ -4480,18 +4481,57 @@ document.addEventListener('click', function (e) {
                     }
                 } else if (type === 'invoice') {
                     let data = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
-                    const updated = data.map(item => {
-                        if (String(item.id) === String(id)) item.deleted = true;
-                        return item;
-                    });
-                    localStorage.setItem('rmk_invoices', JSON.stringify(updated));
+                    const targetIndex = data.findIndex(item => String(item.id) === String(id));
+                    if (targetIndex === -1) return;
 
-                    const active = updated.filter(item => !item.deleted);
+                    const targetInv = data[targetIndex];
+                    targetInv.deleted = true;
+
+                    // Auto-correct subsequent invoice numbers so there are no gaps
+                    const match = String(targetInv.invNumber || '').match(/INV-(\d{4}|\d{2})-(\d{4}|\d{2})-(\d+)/i);
+                    if (match) {
+                        const prefix = `INV-${match[1]}-${match[2]}-`;
+                        const deletedNum = parseInt(match[3], 10);
+                        targetInv.invNumber = `${targetInv.invNumber}-DEL-${Date.now()}`;
+
+                        // Auto-correct: shift down all subsequent active invoice numbers
+                        data.forEach(item => {
+                            if (item.deleted) return;
+                            const itemMatch = String(item.invNumber || '').match(/INV-(\d{4}|\d{2})-(\d{4}|\d{2})-(\d+)/i);
+                            if (itemMatch && `INV-${itemMatch[1]}-${itemMatch[2]}-` === prefix) {
+                                const itemNum = parseInt(itemMatch[3], 10);
+                                if (itemNum > deletedNum) {
+                                    const newNum = itemNum - 1;
+                                    item.invNumber = `${prefix}${String(newNum).padStart(3, '0')}`;
+                                    item.timestamp = new Date().toISOString();
+                                }
+                            }
+                        });
+
+                        // Recompute max active invoice counter for this FY
+                        let maxNum = 0;
+                        data.forEach(item => {
+                            if (item.deleted) return;
+                            const itemMatch = String(item.invNumber || '').match(/INV-(\d{4}|\d{2})-(\d{4}|\d{2})-(\d+)/i);
+                            if (itemMatch && `INV-${itemMatch[1]}-${itemMatch[2]}-` === prefix) {
+                                const n = parseInt(itemMatch[3], 10);
+                                if (n > maxNum) maxNum = n;
+                            }
+                        });
+                        localStorage.setItem('rmk_inv_counter', String(maxNum));
+                    }
+
+                    const sorted = sortInvoicesLatestToOld(data);
+                    localStorage.setItem('rmk_invoices', JSON.stringify(sorted));
+
+                    const active = sorted.filter(item => !item.deleted);
                     if (active.length === 0) {
                         const tableBody = document.querySelector('#invoices .data-table tbody');
                         if (tableBody) tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem;">No invoices found.</td></tr>`;
                     }
                     if (typeof loadInvoicesToTable === 'function') loadInvoicesToTable();
+                    showToast('Invoice deleted & numbers auto-corrected!', 'success');
+                    return;
                 } else if (type === 'quote') {
                     let data = safeJsonParse(localStorage.getItem('rmk_quotes'), []);
                     const updated = data.filter(item => item.id != id);
@@ -4716,6 +4756,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Find the highest invoice number in the current financial year
             let maxCounter = 0;
             invoices.forEach(inv => {
+                if (inv && inv.deleted) return;
                 if (inv.invNumber && inv.invNumber.includes(fyCode)) {
                     const parts = inv.invNumber.split('-');
                     const num = parseInt(parts[parts.length - 1]);
