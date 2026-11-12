@@ -135,10 +135,10 @@
                     <i class="fas fa-file-invoice-dollar"></i>
                 </div>
                 <div class="stat-content">
-                    <h3 class="stat-value">₹0</h3>
+                    <h3 class="stat-value" id="statTotalRevenue">₹0</h3>
                     <p class="stat-label">Total Revenue</p>
-                    <span class="stat-change neutral">
-                        <i class="fas fa-minus"></i> 0%
+                    <span class="stat-change neutral" id="statTotalBillsBadge">
+                        <i class="fas fa-receipt"></i> <strong id="statTotalBills">0</strong> Total Bills
                     </span>
                 </div>
             </div>
@@ -148,36 +148,36 @@
                     <i class="fas fa-check-circle"></i>
                 </div>
                 <div class="stat-content">
-                    <h3 class="stat-value">0</h3>
+                    <h3 class="stat-value" id="statPaidCount">0</h3>
                     <p class="stat-label">Paid Invoices</p>
-                    <span class="stat-change neutral">
-                        <i class="fas fa-minus"></i> 0%
+                    <span class="stat-change positive" id="statUnpaidBadge">
+                        <i class="fas fa-hourglass-half"></i> <strong id="statUnpaidCount">0</strong> Unpaid
                     </span>
                 </div>
             </div>
 
             <div class="stat-card">
-                <div class="stat-icon orange">
-                    <i class="fas fa-clock"></i>
+                <div class="stat-icon b2b-icon" style="background:rgba(2, 132, 199, 0.12); color:#0284C7;">
+                    <i class="fas fa-building"></i>
                 </div>
                 <div class="stat-content">
-                    <h3 class="stat-value">0</h3>
-                    <p class="stat-label">Pending Quotes</p>
-                    <span class="stat-change neutral">
-                        <i class="fas fa-minus"></i> 0%
+                    <h3 class="stat-value" id="statB2BTotal" style="color:#0284C7;">0</h3>
+                    <p class="stat-label">B2B Invoices (Total)</p>
+                    <span class="stat-change" id="statB2BMonthBadge" style="background:#E0F2FE; color:#0369A1; font-weight:700; border:1px solid #BAE6FD;">
+                        <i class="fas fa-calendar-alt"></i> <strong id="statB2BMonth">0</strong> This Month
                     </span>
                 </div>
             </div>
 
             <div class="stat-card">
-                <div class="stat-icon purple">
-                    <i class="fas fa-file-alt"></i>
+                <div class="stat-icon b2c-icon" style="background:rgba(126, 34, 206, 0.12); color:#7E22CE;">
+                    <i class="fas fa-user-tag"></i>
                 </div>
                 <div class="stat-content">
-                    <h3 class="stat-value">0</h3>
-                    <p class="stat-label">Total Quotes</p>
-                    <span class="stat-change neutral">
-                        <i class="fas fa-minus"></i> 0%
+                    <h3 class="stat-value" id="statB2CTotal" style="color:#7E22CE;">0</h3>
+                    <p class="stat-label">B2C Invoices (Total)</p>
+                    <span class="stat-change" id="statB2CMonthBadge" style="background:#F3E8FF; color:#6B21A8; font-weight:700; border:1px solid #E9D5FF;">
+                        <i class="fas fa-calendar-alt"></i> <strong id="statB2CMonth">0</strong> This Month
                     </span>
                 </div>
             </div>
@@ -212,17 +212,18 @@
                         <option value="B2B">B2B Only</option>
                         <option value="B2C">B2C Only</option>
                     </select>
-                    <select class="filter-select">
-                        <option>All Status</option>
-                        <option>Paid</option>
-                        <option>Pending</option>
-                        <option>Overdue</option>
+                    <select class="filter-select" id="filterInvoiceStatus">
+                        <option value="all">All Status</option>
+                        <option value="Paid">Paid</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Overdue">Overdue</option>
                     </select>
-                    <select class="filter-select">
-                        <option>This Month</option>
-                        <option>Last Month</option>
-                        <option>This Quarter</option>
-                        <option>This Year</option>
+                    <select class="filter-select" id="filterInvoicePeriod">
+                        <option value="this-month">This Month</option>
+                        <option value="last-month">Last Month</option>
+                        <option value="this-quarter">This Quarter</option>
+                        <option value="this-year">This Year</option>
+                        <option value="all">All Time</option>
                     </select>
                 </div>
             </div>
@@ -791,7 +792,7 @@
     <script src="assets/js/realtime.js"></script>
     <script src="assets/js/email_config.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="assets/js/admin.js?v=3.6"></script>
+    <script src="assets/js/admin.js?v=3.7"></script>
     <script src="assets/js/admin-pages.js"></script>
 </body>
 </html>

@@ -2632,8 +2632,17 @@ function initializeTableSearch() {
         });
     }
 
+    const filterStatus = document.getElementById('filterInvoiceStatus');
+    const filterPeriod = document.getElementById('filterInvoicePeriod');
+
     if (searchInput) searchInput.addEventListener('input', filterRows);
     if (filterType) filterType.addEventListener('change', filterRows);
+    if (filterStatus) filterStatus.addEventListener('change', filterRows);
+    if (filterPeriod) {
+        filterPeriod.addEventListener('change', () => {
+            if (typeof loadInvoicesToTable === 'function') loadInvoicesToTable();
+        });
+    }
 }
 
 // --- Workers Module Logic ---
@@ -4251,17 +4260,89 @@ function loadInvoicesToTable() {
     const allInvoices = safeJsonParse(localStorage.getItem('rmk_invoices'), []);
     const invoices = sortInvoicesLatestToOld(allInvoices.filter(inv => !inv.deleted));
 
-    // Update Billing Stats - Show TOTAL Billed Revenue for better visibility
+    // Update Billing Stats - Total Revenue, Paid/Unpaid, and B2B & B2C bill counts per month and total
     const totalRevenue = invoices.reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0);
     const paidCount = invoices.filter(inv => inv.status === 'Paid').length;
+    const unpaidCount = invoices.filter(inv => inv.status !== 'Paid').length;
 
-    const stats = document.querySelectorAll('.stats-grid .stat-card');
-    if (stats.length >= 2) {
-        const revEl = stats[0].querySelector('.stat-value');
-        const paidEl = stats[1].querySelector('.stat-value');
-        if (revEl) revEl.textContent = '₹' + totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-        if (paidEl) paidEl.textContent = paidCount;
-    }
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth(); // 0-indexed
+
+    // Check selected period from dropdown if present
+    const periodSelect = document.getElementById('filterInvoicePeriod');
+    const selPeriod = periodSelect ? periodSelect.value : 'this-month';
+
+    let b2bTotal = 0;
+    let b2bPeriodCount = 0;
+    let b2cTotal = 0;
+    let b2cPeriodCount = 0;
+
+    let periodLabel = 'This Month';
+    if (selPeriod === 'last-month') periodLabel = 'Last Month';
+    else if (selPeriod === 'this-quarter') periodLabel = 'This Quarter';
+    else if (selPeriod === 'this-year') periodLabel = 'This Year';
+    else if (selPeriod === 'all') periodLabel = 'All Time';
+
+    invoices.forEach(inv => {
+        const gst = inv.customerGst;
+        const hasGst = gst && gst !== 'N/A' && gst !== 'null' && gst !== 'undefined' && String(gst).trim() !== '';
+        const invType = inv.invoiceType || (hasGst ? 'B2B' : 'B2C');
+
+        const d = parseSafeDate(inv.invDate);
+        let inPeriod = false;
+        if (!isNaN(d.getTime())) {
+            const y = d.getFullYear();
+            const m = d.getMonth();
+            if (selPeriod === 'this-month') {
+                inPeriod = (y === curYear && m === curMonth);
+            } else if (selPeriod === 'last-month') {
+                const lm = curMonth === 0 ? 11 : curMonth - 1;
+                const ly = curMonth === 0 ? curYear - 1 : curYear;
+                inPeriod = (y === ly && m === lm);
+            } else if (selPeriod === 'this-quarter') {
+                const curQ = Math.floor(curMonth / 3);
+                const itemQ = Math.floor(m / 3);
+                inPeriod = (y === curYear && itemQ === curQ);
+            } else if (selPeriod === 'this-year') {
+                inPeriod = (y === curYear);
+            } else {
+                inPeriod = true;
+            }
+        }
+
+        if (invType === 'B2B') {
+            b2bTotal++;
+            if (inPeriod) b2bPeriodCount++;
+        } else {
+            b2cTotal++;
+            if (inPeriod) b2cPeriodCount++;
+        }
+    });
+
+    const revEl = document.getElementById('statTotalRevenue') || document.querySelector('.stats-grid .stat-card:nth-child(1) .stat-value');
+    const paidEl = document.getElementById('statPaidCount') || document.querySelector('.stats-grid .stat-card:nth-child(2) .stat-value');
+    const b2bTotalEl = document.getElementById('statB2BTotal');
+    const b2bMonthEl = document.getElementById('statB2BMonth');
+    const b2cTotalEl = document.getElementById('statB2CTotal');
+    const b2cMonthEl = document.getElementById('statB2CMonth');
+    const totalBillsEl = document.getElementById('statTotalBills');
+    const unpaidEl = document.getElementById('statUnpaidCount');
+    const b2bMonthBadge = document.getElementById('statB2BMonthBadge');
+    const b2cMonthBadge = document.getElementById('statB2CMonthBadge');
+
+    if (revEl) revEl.textContent = '₹' + totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    if (paidEl) paidEl.textContent = paidCount;
+    if (totalBillsEl) totalBillsEl.textContent = invoices.length;
+    if (unpaidEl) unpaidEl.textContent = unpaidCount;
+
+    if (b2bTotalEl) b2bTotalEl.textContent = b2bTotal;
+    if (b2bMonthEl) b2bMonthEl.textContent = b2bPeriodCount;
+    if (b2cTotalEl) b2cTotalEl.textContent = b2cTotal;
+    if (b2cMonthEl) b2cMonthEl.textContent = b2cPeriodCount;
+
+    if (b2bMonthBadge) b2bMonthBadge.innerHTML = `<i class="fas fa-calendar-alt"></i> <strong id="statB2BMonth">${b2bPeriodCount}</strong> ${periodLabel}`;
+    if (b2cMonthBadge) b2cMonthBadge.innerHTML = `<i class="fas fa-calendar-alt"></i> <strong id="statB2CMonth">${b2cPeriodCount}</strong> ${periodLabel}`;
 
 
     if (invoices.length === 0) return;
@@ -4327,14 +4408,11 @@ function loadQuotesToTable() {
 
     const quotes = safeJsonParse(localStorage.getItem('rmk_quotes'), []);
     
-    // Update Stats for quotes
-    const stats = document.querySelectorAll('.stats-grid .stat-card');
-    if (stats.length >= 4) {
-        const totalQuotesEl = stats[3].querySelector('.stat-value');
-        const pendingQuotesEl = stats[2].querySelector('.stat-value');
-        if (totalQuotesEl) totalQuotesEl.textContent = quotes.length;
-        if (pendingQuotesEl) pendingQuotesEl.textContent = quotes.length; 
-    }
+    // Update Stats for quotes only if specific elements exist
+    const totalQuotesEl = document.getElementById('statTotalQuotes');
+    const pendingQuotesEl = document.getElementById('statPendingQuotes');
+    if (totalQuotesEl) totalQuotesEl.textContent = quotes.length;
+    if (pendingQuotesEl) pendingQuotesEl.textContent = quotes.length;
 
     if (quotes.length === 0) return;
 
