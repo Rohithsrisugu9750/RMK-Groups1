@@ -883,9 +883,28 @@ function initializeInvoiceModalLogic() {
                 document.querySelectorAll('.custom-client-details input').forEach(el => el.disabled = false);
             }
 
+            if (customer) {
+                const typeSelect = document.getElementById('invInvoiceType');
+                if (typeSelect) {
+                    const hasGst = customer.gst && customer.gst !== 'N/A' && customer.gst !== 'null' && customer.gst.trim() !== '';
+                    typeSelect.value = hasGst ? 'B2B' : 'B2C';
+                }
+            }
+
             if (customer && invTaxType) {
                 invTaxType.value = (customer.state === 'Tamil Nadu') ? 'intra' : 'inter';
                 calculateInvoiceTotals();
+            }
+        });
+    }
+
+    const invCustomClientGst = document.getElementById('invCustomClientGst');
+    if (invCustomClientGst) {
+        invCustomClientGst.addEventListener('input', function () {
+            const typeSelect = document.getElementById('invInvoiceType');
+            if (typeSelect) {
+                const val = this.value.trim();
+                typeSelect.value = (val && val !== 'N/A') ? 'B2B' : 'B2C';
             }
         });
     }
@@ -1125,8 +1144,11 @@ function numberToWords(amount) {
 }
 
 function printInvoice() {
-    // 1. Set Labels for Invoice
-    document.getElementById('pDocTitle').textContent = 'INVOICE';
+    // 1. Set Labels for Invoice with B2B/B2C
+    const curCustGst = document.getElementById('invCustomClientGst')?.value || '';
+    const hasCurGst = curCustGst && curCustGst !== 'N/A' && curCustGst.trim() !== '';
+    const curInvType = document.getElementById('invInvoiceType')?.value || (hasCurGst ? 'B2B' : 'B2C');
+    document.getElementById('pDocTitle').textContent = 'TAX INVOICE (' + curInvType + ')';
 
     // 2. Populate Print Template
     document.getElementById('pInvNumber').textContent = document.getElementById('invNumber').value;
@@ -1857,9 +1879,17 @@ function saveInvoiceToStorage() {
     if (balanceDue <= 0) status = 'Paid';
     else if (receivedAmountVal > 0) status = 'Partial';
 
+    // Determine B2B or B2C
+    let invoiceType = document.getElementById('invInvoiceType')?.value || '';
+    if (!invoiceType) {
+        const hasGst = customerGst && customerGst !== 'N/A' && customerGst !== 'null' && customerGst !== 'undefined' && String(customerGst).trim() !== '';
+        invoiceType = hasGst ? 'B2B' : 'B2C';
+    }
+
     const invoiceData = {
         id: Date.now(),
         invNumber,
+        invoiceType,
         invDate,
         invDueDate: document.getElementById('invDueDate')?.value || '',
         customerName,
@@ -1951,6 +1981,12 @@ window.openEditInvoiceModal = function(invoice) {
     }
     
     if (document.getElementById('invTaxType')) document.getElementById('invTaxType').value = invoice.taxType || 'intra';
+    
+    if (document.getElementById('invInvoiceType')) {
+        const gst = invoice.customerGst;
+        const hasGst = gst && gst !== 'N/A' && gst !== 'null' && gst !== 'undefined' && String(gst).trim() !== '';
+        document.getElementById('invInvoiceType').value = invoice.invoiceType || (hasGst ? 'B2B' : 'B2C');
+    }
     
     const productItemsContainer = document.getElementById('invProductItems');
     if (productItemsContainer) {
@@ -2566,19 +2602,33 @@ function initializeTabs() {
 
 function initializeTableSearch() {
     const searchInput = document.getElementById('searchInput');
-    if (!searchInput) return;
+    const filterType = document.getElementById('filterInvoiceType');
 
-    searchInput.addEventListener('input', function () {
-        const searchTerm = this.value.toLowerCase();
-        const activeTab = document.querySelector('.tab-content.active') || document.querySelector('.data-table'); // Fallback if no tabs
+    function filterRows() {
+        const searchTerm = (searchInput ? searchInput.value : '').toLowerCase().trim();
+        const selectedType = filterType ? filterType.value : 'all';
+
+        const activeTab = document.querySelector('.tab-content.active') || document.querySelector('.data-table');
         if (!activeTab) return;
 
         const rows = activeTab.querySelectorAll('tbody tr');
         rows.forEach(row => {
             const text = row.textContent.toLowerCase();
-            row.style.display = text.includes(searchTerm) ? '' : 'none';
+            const matchesSearch = !searchTerm || text.includes(searchTerm);
+
+            let matchesType = true;
+            if (selectedType !== 'all') {
+                const pill = row.querySelector('.type-pill');
+                const rowType = pill ? pill.textContent.trim().toUpperCase() : '';
+                matchesType = rowType === selectedType.toUpperCase();
+            }
+
+            row.style.display = (matchesSearch && matchesType) ? '' : 'none';
         });
-    });
+    }
+
+    if (searchInput) searchInput.addEventListener('input', filterRows);
+    if (filterType) filterType.addEventListener('change', filterRows);
 }
 
 // --- Workers Module Logic ---
@@ -3847,9 +3897,12 @@ function initializeGstDownloadCenter() {
         const sortedInvoices = sortInvoicesLatestToOld(filteredInvoices);
 
         let csvContent = "";
-        csvContent += "Invoice Date,Invoice Number,Customer Name,Customer GST,Tax Type,GST %,CGST,SGST,Total Tax,Total Amount,Product,Quantity\r\n";
+        csvContent += "Invoice Date,Invoice Number,Invoice Type,Customer Name,Customer GST,Tax Type,GST %,CGST,SGST,Total Tax,Total Amount,Product,Quantity\r\n";
 
         sortedInvoices.forEach(inv => {
+            const gst = inv.customerGst;
+            const hasGst = gst && gst !== 'N/A' && gst !== 'null' && gst !== 'undefined' && String(gst).trim() !== '';
+            const invType = inv.invoiceType || (hasGst ? 'B2B' : 'B2C');
             const productNames = (inv.products || []).map(item => item.description).join(" | ");
             const productQuantities = (inv.products || []).map(item => item.qty).join(" | ");
             let gstTot = parseFloat(inv.gstTotal);
@@ -3876,6 +3929,7 @@ function initializeGstDownloadCenter() {
                 const row = [
                     inv.invDate,
                     formattedInvNum,
+                    invType,
                     inv.customerName,
                     inv.customerGst || 'N/A',
                     inv.taxType,
@@ -4222,12 +4276,18 @@ function loadInvoicesToTable() {
         const gstPercent = (subtotal > 0 && gstTotal > 0) ? Math.round((gstTotal / subtotal) * 100) + '%' : '0%';
         const gstAmtText = gstTotal > 0 ? `₹${gstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-';
 
+        const gst = inv.customerGst;
+        const hasGst = gst && gst !== 'N/A' && gst !== 'null' && gst !== 'undefined' && String(gst).trim() !== '';
+        const invType = inv.invoiceType || (hasGst ? 'B2B' : 'B2C');
+        const typeBadgeClass = invType === 'B2B' ? 'badge-b2b' : 'badge-b2c';
+
         tr.innerHTML = `
             <td style="font-weight:600; color:var(--primary)">${inv.invNumber}</td>
+            <td><span class="type-pill ${typeBadgeClass}">${invType}</span></td>
             <td>
                 <div style="display:flex; flex-direction:column;">
-                    <span>${inv.customerName}</span>
-                    <small style="color:var(--text-light); font-size:0.75rem;">${inv.customerPhone || ''}</small>
+                    <span style="font-weight:600;">${inv.customerName}</span>
+                    ${hasGst ? ('<small style="color:#0369A1; font-size:0.75rem; font-weight:600;"><i class="fas fa-building" style="margin-right:3px;"></i>' + inv.customerGst + '</small>') : ('<small style="color:var(--text-light); font-size:0.75rem;">' + (inv.customerPhone || 'Consumer') + '</small>')}
                 </div>
             </td>
             <td>${inv.invDate}</td>

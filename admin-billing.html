@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
     <!-- Styles -->
-    <link rel="stylesheet" href="assets/css/admin.css">
+    <link rel="stylesheet" href="assets/css/admin.css?v=3.5">
     <!-- Moved to bottom for performance -->
 </head>
 
@@ -207,6 +207,11 @@
                     <input type="text" placeholder="Search by customer, invoice #..." id="searchInput">
                 </div>
                 <div class="filter-group">
+                    <select class="filter-select" id="filterInvoiceType">
+                        <option value="all">All Types (B2B / B2C)</option>
+                        <option value="B2B">B2B Only</option>
+                        <option value="B2C">B2C Only</option>
+                    </select>
                     <select class="filter-select">
                         <option>All Status</option>
                         <option>Paid</option>
@@ -230,6 +235,7 @@
                     <thead>
                         <tr>
                             <th>Invoice #</th>
+                            <th>Type</th>
                             <th>Customer</th>
                             <th>Date</th>
                             <th>Amount</th>
@@ -242,7 +248,7 @@
                     <tbody>
                         <!-- Data cleared -->
                         <tr>
-                            <td colspan="8" style="text-align: center; padding: 2rem;">
+                            <td colspan="9" style="text-align: center; padding: 2rem;">
                                 No invoices found.
                             </td>
                         </tr>
@@ -495,6 +501,13 @@
                             <div class="form-group">
                                 <label>Invoice Number *</label>
                                 <input type="text" id="invNumber" class="form-control" placeholder="Auto-generated" required autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                                <label>Invoice Category *</label>
+                                <select id="invInvoiceType" class="form-control" style="font-weight:600;">
+                                    <option value="B2B">B2B (Registered Business)</option>
+                                    <option value="B2C" selected>B2C (Consumer / Unregistered)</option>
+                                </select>
                             </div>
                         </div>
 
@@ -778,7 +791,7 @@
     <script src="assets/js/realtime.js"></script>
     <script src="assets/js/email_config.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="assets/js/admin.js?v=3.4"></script>
+    <script src="assets/js/admin.js?v=3.5"></script>
     <script src="assets/js/admin-pages.js"></script>
 </body>
 </html>

@@ -10,7 +10,7 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@700;800;900&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="assets/css/admin.css">
+    <link rel="stylesheet" href="assets/css/admin.css?v=3.5">
     <style>
         :root {
             --bill-primary: #064E3B;
@@ -242,6 +242,7 @@
             </div>
             <div class="bill-meta">
                 <h2 id="pDocTitle">TAX INVOICE</h2>
+                <div id="pInvoiceTypeBadge" style="display:inline-block; margin-top:4px; margin-bottom:6px; padding:3px 10px; border-radius:4px; font-weight:800; font-size:12px; letter-spacing:1px; background:#064E3B; color:#fff;">B2B</div>
                 <p style="font-size: 18px; white-space: nowrap;">No: <span id="pInvNumber" style="color:#d93025; font-weight: 900;"></span></p>
                 <p>Date: <span id="pInvDate"></span></p>
             </div>
@@ -334,6 +335,27 @@
             // Populate Header Details
             document.getElementById('pInvNumber').textContent = invoiceData.invNumber || 'N/A';
             document.getElementById('pInvDate').textContent = invoiceData.invDate || 'N/A';
+
+            // Determine B2B or B2C
+            const gstVal = invoiceData.customerGst;
+            const hasGst = gstVal && gstVal !== 'N/A' && gstVal !== 'null' && gstVal !== 'undefined' && String(gstVal).trim() !== '';
+            const invType = invoiceData.invoiceType || (hasGst ? 'B2B' : 'B2C');
+
+            const docTitle = document.getElementById('pDocTitle');
+            if (docTitle) docTitle.textContent = `TAX INVOICE (${invType})`;
+
+            const typeBadge = document.getElementById('pInvoiceTypeBadge');
+            if (typeBadge) {
+                if (invType === 'B2B') {
+                    typeBadge.style.background = '#064E3B';
+                    typeBadge.style.color = '#fff';
+                    typeBadge.textContent = 'B2B (TAX INVOICE)';
+                } else {
+                    typeBadge.style.background = '#1E3A8A';
+                    typeBadge.style.color = '#fff';
+                    typeBadge.textContent = 'B2C (RETAIL INVOICE)';
+                }
+            }
             
             // Custom Logo support
             const savedLogo = localStorage.getItem('savedPrintLogo');
