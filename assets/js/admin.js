@@ -2643,6 +2643,29 @@ function initializeTableSearch() {
             if (typeof loadInvoicesToTable === 'function') loadInvoicesToTable();
         });
     }
+
+    const cardB2B = document.getElementById('cardB2B');
+    const cardB2C = document.getElementById('cardB2C');
+    if (cardB2B) {
+        cardB2B.addEventListener('click', () => {
+            if (filterType) {
+                filterType.value = filterType.value === 'B2B' ? 'all' : 'B2B';
+                filterRows();
+                const tableSection = document.querySelector('.table-container') || document.querySelector('.data-table');
+                if (tableSection) tableSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        });
+    }
+    if (cardB2C) {
+        cardB2C.addEventListener('click', () => {
+            if (filterType) {
+                filterType.value = filterType.value === 'B2C' ? 'all' : 'B2C';
+                filterRows();
+                const tableSection = document.querySelector('.table-container') || document.querySelector('.data-table');
+                if (tableSection) tableSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        });
+    }
 }
 
 // --- Workers Module Logic ---
@@ -4274,9 +4297,14 @@ function loadInvoicesToTable() {
     const selPeriod = periodSelect ? periodSelect.value : 'this-month';
 
     let b2bTotal = 0;
+    let b2bTotalAmount = 0;
     let b2bPeriodCount = 0;
+    let b2bPeriodAmount = 0;
+
     let b2cTotal = 0;
+    let b2cTotalAmount = 0;
     let b2cPeriodCount = 0;
+    let b2cPeriodAmount = 0;
 
     let periodLabel = 'This Month';
     if (selPeriod === 'last-month') periodLabel = 'Last Month';
@@ -4288,6 +4316,7 @@ function loadInvoicesToTable() {
         const gst = inv.customerGst;
         const hasGst = gst && gst !== 'N/A' && gst !== 'null' && gst !== 'undefined' && String(gst).trim() !== '';
         const invType = inv.invoiceType || (hasGst ? 'B2B' : 'B2C');
+        const amt = parseFloat(inv.total) || 0;
 
         const d = parseSafeDate(inv.invDate);
         let inPeriod = false;
@@ -4313,17 +4342,27 @@ function loadInvoicesToTable() {
 
         if (invType === 'B2B') {
             b2bTotal++;
-            if (inPeriod) b2bPeriodCount++;
+            b2bTotalAmount += amt;
+            if (inPeriod) {
+                b2bPeriodCount++;
+                b2bPeriodAmount += amt;
+            }
         } else {
             b2cTotal++;
-            if (inPeriod) b2cPeriodCount++;
+            b2cTotalAmount += amt;
+            if (inPeriod) {
+                b2cPeriodCount++;
+                b2cPeriodAmount += amt;
+            }
         }
     });
 
     const revEl = document.getElementById('statTotalRevenue') || document.querySelector('.stats-grid .stat-card:nth-child(1) .stat-value');
     const paidEl = document.getElementById('statPaidCount') || document.querySelector('.stats-grid .stat-card:nth-child(2) .stat-value');
+    const b2bAmountEl = document.getElementById('statB2BAmount');
     const b2bTotalEl = document.getElementById('statB2BTotal');
     const b2bMonthEl = document.getElementById('statB2BMonth');
+    const b2cAmountEl = document.getElementById('statB2CAmount');
     const b2cTotalEl = document.getElementById('statB2CTotal');
     const b2cMonthEl = document.getElementById('statB2CMonth');
     const totalBillsEl = document.getElementById('statTotalBills');
@@ -4336,13 +4375,20 @@ function loadInvoicesToTable() {
     if (totalBillsEl) totalBillsEl.textContent = invoices.length;
     if (unpaidEl) unpaidEl.textContent = unpaidCount;
 
+    if (b2bAmountEl) b2bAmountEl.textContent = '₹' + b2bTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     if (b2bTotalEl) b2bTotalEl.textContent = b2bTotal;
     if (b2bMonthEl) b2bMonthEl.textContent = b2bPeriodCount;
+
+    if (b2cAmountEl) b2cAmountEl.textContent = '₹' + b2cTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     if (b2cTotalEl) b2cTotalEl.textContent = b2cTotal;
     if (b2cMonthEl) b2cMonthEl.textContent = b2cPeriodCount;
 
-    if (b2bMonthBadge) b2bMonthBadge.innerHTML = `<i class="fas fa-calendar-alt"></i> <strong id="statB2BMonth">${b2bPeriodCount}</strong> ${periodLabel}`;
-    if (b2cMonthBadge) b2cMonthBadge.innerHTML = `<i class="fas fa-calendar-alt"></i> <strong id="statB2CMonth">${b2cPeriodCount}</strong> ${periodLabel}`;
+    if (b2bMonthBadge) {
+        b2bMonthBadge.innerHTML = `<i class="fas fa-calendar-alt"></i> ₹${b2bPeriodAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (${b2bPeriodCount} Bills) ${periodLabel}`;
+    }
+    if (b2cMonthBadge) {
+        b2cMonthBadge.innerHTML = `<i class="fas fa-calendar-alt"></i> ₹${b2cPeriodAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (${b2cPeriodCount} Bills) ${periodLabel}`;
+    }
 
 
     if (invoices.length === 0) return;
