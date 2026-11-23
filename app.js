@@ -4,10 +4,15 @@ const path = require('path');
 const http = require('http');
 const { Server } = require("socket.io");
 const mysql = require('mysql2/promise');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.join(__dirname, '.env'), override: true });
 
 // Security & Authentication Configuration
 const SYNC_AUTH_TOKEN = process.env.SYNC_AUTH_TOKEN || 'rmk_sec_99520_karthick_raja_auth_token_2026';
+
+if (!process.env.DB_USER || !process.env.DB_PASSWORD) {
+    console.warn('⚠️ WARNING: DB_USER or DB_PASSWORD is missing in process.env / .env file!');
+    console.warn(`Current DB_HOST: ${process.env.DB_HOST || 'localhost'}, DB_USER: ${process.env.DB_USER || '(empty)'}, DB_NAME: ${process.env.DB_NAME || '(empty)'}`);
+}
 
 function authenticateSync(req, res, next) {
     const clientAuth = req.headers['x-rmk-auth'] || req.query.auth;
